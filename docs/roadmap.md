@@ -2,9 +2,9 @@
 
 This roadmap records confirmed direction, not delivery dates.
 
-## First Meaningful Deliverable
+## Implemented First Deliverable
 
-Design and implement a stable-Rust macOS CLI that:
+The stable-Rust macOS implementation now:
 
 - performs validated, non-transitive character-to-character replacement;
 - supports standard input/output, file-to-file processing, and in-place
@@ -15,21 +15,22 @@ Design and implement a stable-Rust macOS CLI that:
 - provides an `rg`-style dry run suitable for CI;
 - protects in-place writes with atomic replacement, permission preservation,
   and backups;
-- includes benchmarks representative of large text-cleanup workloads.
+- includes initial synthetic engine, file, and directory benchmarks.
 
-## Before Implementation
+It also exposes the replacement engine, preset handling, and safe file
+operations as a reusable library rather than coupling them to the CLI.
 
-Resolve and document:
+## Next Decisions
 
-- the complete built-in AI preset;
-- the external preset file grammar;
-- escaping rules for inline and file-based presets;
-- backup naming and retention behavior;
-- fatal I/O exit statuses and the exact diagnostic format;
-- representative workload sizes and benchmark methodology.
-
-These decisions must be made before their affected interfaces are treated as
-stable.
+- Expand the conservative built-in AI preset only with mappings that preserve
+  the unique-destination invariant.
+- Define representative real-world workload sizes, hardware baselines,
+  throughput targets, memory limits, and performance regression thresholds.
+- Measure the checked-in benchmarks before deciding whether streaming, memory
+  mapping, a different lookup structure, or parallel directory traversal is
+  justified.
+- Decide whether the preset grammar and CLI surface are ready to be treated as
+  stable public interfaces.
 
 ## Later Considerations
 
@@ -37,8 +38,7 @@ stable.
   after the first implementation establishes portable behavior and tests.
 - Set a minimum supported Rust version only when the dependency and release
   strategy makes it useful.
-- Add architecture and validation documentation after real code, commands, and
-  feedback loops exist.
+- Add platform-specific test coverage before claiming support beyond macOS.
 
 ## Current Non-Goals
 

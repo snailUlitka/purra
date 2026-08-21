@@ -23,10 +23,10 @@ Runtime dependencies are intentionally limited to capabilities already required
 by the product specification:
 
 - `clap` parses the command-line interface.
-- `anyhow` adds context to failures at the application boundary.
 - `anstream` and `anstyle` provide terminal-aware styled diagnostics.
 - `walkdir` supports recursive and non-recursive directory traversal.
 - `tempfile` supports atomic replacement workflows.
+- `thiserror` defines typed errors across the public library boundary.
 
 Development dependencies establish the planned feedback loops:
 
@@ -57,10 +57,10 @@ Compile all targets and feature combinations while treating lints as errors:
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-Run all tests:
+Run unit and integration tests without executing benchmark targets:
 
 ```sh
-cargo test --all-targets --all-features
+cargo test --lib --bins --tests --all-features
 ```
 
 Build an optimized executable:
@@ -69,5 +69,37 @@ Build an optimized executable:
 cargo build --release
 ```
 
-Do not document a benchmark command as a meaningful validation step until the
-repository contains a representative benchmark target and dataset strategy.
+Compile benchmarks without running them as part of lint validation:
+
+```sh
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+When benchmark execution is explicitly requested, run:
+
+```sh
+cargo bench --bench engine
+```
+
+The benchmark target covers approximately 1 MiB clean ASCII, sparse AI
+typography, dense AI typography, regional-indicator, file-read-and-replace, and
+directory-discovery workloads. Do not treat these synthetic cases as a
+performance claim; record a hardware baseline and add representative real data
+before setting regression thresholds.
+
+## GitHub Actions
+
+`.github/workflows/ci.yml` runs on pushes to `main`, version tags, pull requests,
+and manual dispatches. The quality job checks formatting, Clippy, unit and
+integration tests, and documentation tests.
+
+After quality succeeds, native runners test and build release binaries for:
+
+| Artifact | Runner | Rust target |
+| --- | --- | --- |
+| `purra-0.1.0-macos-arm64` | `macos-26` | `aarch64-apple-darwin` |
+| `purra-0.1.0-linux-x86_64` | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` |
+| `purra-0.1.0-linux-arm64` | `ubuntu-24.04-arm` | `aarch64-unknown-linux-gnu` |
+
+Each artifact contains a compressed `purra` executable and is retained for 14
+days. Update the embedded artifact version when preparing a later release.

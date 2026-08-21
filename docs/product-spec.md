@@ -13,13 +13,15 @@ stable Rust.
 
 ## Replacement Model
 
-- Every rule maps exactly one Unicode character to exactly one Unicode
-  character.
+- Every rule maps exactly one Unicode scalar value to exactly one Unicode scalar
+  value. A multi-scalar grapheme such as a complete flag is not one character
+  under this contract.
 - Rules are literal; regular expressions and multi-character strings are out of
   scope.
 - All rules are applied as one non-transitive mapping. A character produced by
   a rule is not processed again during the same run.
 - Keys must be unique. Values must also be unique.
+- A rule that maps a character to itself is invalid.
 
 For example, with `a=b` and `b=c`, original `a` becomes `b` and original `b`
 becomes `c`; the produced `b` is not processed a second time. Processing is
@@ -27,24 +29,35 @@ defined by each original input character only.
 
 ## Presets
 
-Purra will support three sources of replacement rules:
+Purra supports three sources of replacement rules:
 
-- `--ai-preset` selects a built-in preset shipped with the tool. It will include
-  replacements for long dashes and similar AI-associated typography. Its exact
-  contents are deferred.
+- `--ai-preset` selects the built-in preset shipped with the tool.
 - `--preset <path>.preset` loads an external preset.
 - `--in-place-preset "a=b,c=d"` supplies rules directly on the command line.
 
-External and inline rules use `K=V` pairs. The exact file layout, whitespace
-rules, comment syntax, and escaping for delimiters or control characters remain
-to be designed.
+The initial built-in rules are:
+
+| Source | Destination |
+| --- | --- |
+| em dash `—` | hyphen-minus `-` |
+| no-break space `U+00A0` | space |
+| left double quotation mark `“` | ASCII double quote `"` |
+| right single quotation mark `’` | ASCII apostrophe `'` |
+
+Inline rules are comma-separated `K=V` pairs. External preset files contain one
+pair per line; blank lines and lines whose first non-whitespace character is `#`
+are ignored. Surrounding whitespace is ignored, so a literal space must use
+`\s`.
+
+The supported escapes are `\n`, `\r`, `\t`, `\0`, `\s`, `\\`, `\=`, `\,`,
+`\#`, and `\u{HEX}` with one to six hexadecimal digits.
 
 ### Validation Guarantee
 
 Purra must parse and validate the complete selected preset before reading or
 modifying any target input. It must fail without partial processing when the
 preset contains any syntax error, malformed pair, non-character key or value,
-duplicate key, or duplicate value.
+duplicate key, duplicate value, or no-op mapping.
 
 An invalid preset is a usage/configuration error and exits with status `2`.
 
@@ -73,9 +86,14 @@ Behavior by input shape:
 - Directory processing asks for `y/n` confirmation before each file replacement.
 - `-f` disables per-file confirmation.
 
-In-place writes must use an atomic replacement strategy, preserve file
-permissions, and create a backup. The backup naming and retention policy remain
-to be designed before implementation.
+In-place writes use an atomic replacement strategy, preserve file permissions,
+and create a unique hidden sibling backup. Backups are named
+`.NAME.purra.bak`, `.NAME.purra.bak.1`, and so on, and are retained until the
+user removes them. Generated backups are excluded from directory scans.
+
+File-to-file output is also written atomically. An existing output keeps its own
+permissions; a new output inherits the input permissions. When input and output
+resolve to the same file, the operation uses the in-place backup workflow.
 
 ## File Classification
 
@@ -84,8 +102,8 @@ to be designed before implementation.
 - Symbolic links are not followed and are skipped with a warning.
 - Hidden regular files are processed under the same rules as other files.
 
-The exact binary-detection method and warning format remain implementation
-decisions.
+A NUL byte classifies a file as binary. Invalid UTF-8 and symbolic links produce
+warnings; binary files are silently ignored.
 
 ## Dry Run
 
@@ -97,15 +115,19 @@ decisions.
 - a summary reports the detected problems;
 - exit status is `1` when at least one problem is found.
 
+Columns count Unicode scalar values. `--color auto|always|never` controls ANSI
+styling.
+
 Exit status `0` means that processing or checking completed without findings.
 Exit status `2` is reserved for invalid configuration or usage, including an
-invalid preset. Additional fatal I/O status semantics will be specified during
-CLI design.
+invalid preset. Fatal I/O and runtime failures use status `3`.
 
 ## Performance
 
 Performance comparable to Ruff is a product goal, but it is not yet a measurable
-acceptance criterion. Implementation work must introduce representative
-benchmarks for both streaming and file/directory workloads. Dataset sizes,
-hardware baselines, throughput targets, memory limits, and regression thresholds
-must be defined from real workloads before performance claims are made.
+acceptance criterion. Dataset sizes, hardware baselines, throughput targets,
+memory limits, and regression thresholds must be defined from real workloads
+before performance claims are made. The repository includes compile-checked
+Criterion cases for clean ASCII, sparse and dense AI typography,
+regional-indicator flag scalars, file loading plus replacement, and directory
+discovery; results have not yet been recorded.
