@@ -25,12 +25,6 @@ pub enum EngineError {
         first: usize,
         second: usize,
     },
-    #[error("duplicate destination character {character:?} in rules {first} and {second}")]
-    DuplicateDestination {
-        character: char,
-        first: usize,
-        second: usize,
-    },
     #[error("rule {position} maps {character:?} to itself")]
     NoOp { character: char, position: usize },
 }
@@ -188,7 +182,6 @@ impl Engine {
 
 fn validate_rules(rules: &[Rule]) -> Result<(), EngineError> {
     let mut sources = HashMap::with_capacity(rules.len());
-    let mut destinations = HashMap::with_capacity(rules.len());
 
     for (index, rule) in rules.iter().enumerate() {
         let position = index + 1;
@@ -201,13 +194,6 @@ fn validate_rules(rules: &[Rule]) -> Result<(), EngineError> {
         if let Some(first) = sources.insert(rule.from, position) {
             return Err(EngineError::DuplicateSource {
                 character: rule.from,
-                first,
-                second: position,
-            });
-        }
-        if let Some(first) = destinations.insert(rule.to, position) {
-            return Err(EngineError::DuplicateDestination {
-                character: rule.to,
                 first,
                 second: position,
             });
@@ -273,14 +259,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_duplicate_sources_and_destinations() {
+    fn accepts_duplicate_destinations() {
+        let engine = Engine::new([Rule::new('–', '-'), Rule::new('—', '-')]).unwrap();
+
+        assert_eq!(engine.replace("–—").text, "--");
+    }
+
+    #[test]
+    fn rejects_duplicate_sources_and_no_op_rules() {
         assert!(matches!(
             Engine::new([Rule::new('a', 'b'), Rule::new('a', 'c')]),
             Err(EngineError::DuplicateSource { .. })
-        ));
-        assert!(matches!(
-            Engine::new([Rule::new('a', 'c'), Rule::new('b', 'c')]),
-            Err(EngineError::DuplicateDestination { .. })
         ));
         assert!(matches!(
             Engine::new([Rule::new('a', 'a')]),

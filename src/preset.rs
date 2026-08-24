@@ -5,6 +5,48 @@ use thiserror::Error;
 
 use crate::engine::{Engine, EngineError, Rule};
 
+// Unicode 17.0 General_Category=Dash_Punctuation, excluding the normalized
+// ASCII HYPHEN-MINUS. MINUS SIGN is included because it is commonly used as a
+// typographic hyphen despite belonging to General_Category=Math_Symbol.
+const AI_DASHES: &[char] = &[
+    '\u{058a}',
+    '\u{05be}',
+    '\u{1400}',
+    '\u{1806}',
+    '\u{2010}',
+    '\u{2011}',
+    '\u{2012}',
+    '\u{2013}',
+    '\u{2014}',
+    '\u{2015}',
+    '\u{2212}',
+    '\u{2e17}',
+    '\u{2e1a}',
+    '\u{2e3a}',
+    '\u{2e3b}',
+    '\u{2e40}',
+    '\u{2e5d}',
+    '\u{301c}',
+    '\u{3030}',
+    '\u{30a0}',
+    '\u{fe31}',
+    '\u{fe32}',
+    '\u{fe58}',
+    '\u{fe63}',
+    '\u{ff0d}',
+    '\u{10d6e}',
+    '\u{10ead}',
+];
+
+// Unicode 17.0 General_Category=Space_Separator, excluding ASCII SPACE.
+const AI_SPACES: &[char] = &[
+    '\u{00a0}', '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}', '\u{2004}', '\u{2005}',
+    '\u{2006}', '\u{2007}', '\u{2008}', '\u{2009}', '\u{200a}', '\u{202f}', '\u{205f}', '\u{3000}',
+];
+
+const AI_DOUBLE_QUOTES: &[char] = &['\u{00ab}', '\u{00bb}', '“', '”', '„', '‟'];
+const AI_SINGLE_QUOTES: &[char] = &['‘', '’', '‚', '‛'];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Preset {
     rules: Vec<Rule>,
@@ -61,16 +103,28 @@ impl Preset {
         })
     }
 
-    /// The conservative built-in AI typography preset shipped with Purra.
+    /// The built-in AI typography normalization preset shipped with Purra.
     #[must_use]
     pub fn ai() -> Self {
-        Self::from_rules([
-            Rule::new('—', '-'),
-            Rule::new('\u{a0}', ' '),
-            Rule::new('“', '"'),
-            Rule::new('’', '\''),
-        ])
-        .expect("the built-in AI preset must remain valid")
+        let rules = AI_DASHES
+            .iter()
+            .copied()
+            .map(|from| Rule::new(from, '-'))
+            .chain(AI_SPACES.iter().copied().map(|from| Rule::new(from, ' ')))
+            .chain(
+                AI_DOUBLE_QUOTES
+                    .iter()
+                    .copied()
+                    .map(|from| Rule::new(from, '"')),
+            )
+            .chain(
+                AI_SINGLE_QUOTES
+                    .iter()
+                    .copied()
+                    .map(|from| Rule::new(from, '\'')),
+            );
+
+        Self::from_rules(rules).expect("the built-in AI preset must remain valid")
     }
 
     #[must_use]
@@ -243,7 +297,7 @@ fn parse_unicode_escape(
 
 #[cfg(test)]
 mod tests {
-    use super::{Preset, PresetError};
+    use super::{AI_DASHES, AI_DOUBLE_QUOTES, AI_SINGLE_QUOTES, AI_SPACES, Preset, PresetError};
 
     #[test]
     fn parses_inline_literals_and_escapes() {
@@ -275,9 +329,15 @@ mod tests {
     }
 
     #[test]
-    fn rejects_duplicate_keys_values_and_bad_syntax() {
+    fn accepts_duplicate_values() {
+        let preset = Preset::parse_inline("a=c,b=c").unwrap();
+
+        assert_eq!(preset.engine().replace("ab").text, "cc");
+    }
+
+    #[test]
+    fn rejects_duplicate_keys_and_bad_syntax() {
         assert!(Preset::parse_inline("a=b,a=c").is_err());
-        assert!(Preset::parse_inline("a=c,b=c").is_err());
         assert!(Preset::parse_inline("ab=c").is_err());
         assert!(Preset::parse_inline("a=b=c").is_err());
         assert!(Preset::parse_inline("").is_err());
@@ -286,9 +346,23 @@ mod tests {
     }
 
     #[test]
-    fn built_in_preset_has_expected_typography() {
+    fn built_in_preset_normalizes_dashes_spaces_and_quotes() {
         let engine = Preset::ai().engine();
 
-        assert_eq!(engine.replace("“—’\u{a0}").text, "\"-' ");
+        assert_eq!(engine.rule_count(), 53);
+        for &character in AI_DASHES {
+            assert_eq!(engine.replacement_for(character), Some('-'));
+        }
+        for &character in AI_SPACES {
+            assert_eq!(engine.replacement_for(character), Some(' '));
+        }
+        for &character in AI_DOUBLE_QUOTES {
+            assert_eq!(engine.replacement_for(character), Some('"'));
+        }
+        for &character in AI_SINGLE_QUOTES {
+            assert_eq!(engine.replacement_for(character), Some('\''));
+        }
+
+        assert_eq!(engine.replace("“—’\u{a0}«– ‚").text, "\"-' \"- '",);
     }
 }

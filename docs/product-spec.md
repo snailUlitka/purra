@@ -20,7 +20,8 @@ stable Rust.
   scope.
 - All rules are applied as one non-transitive mapping. A character produced by
   a rule is not processed again during the same run.
-- Keys must be unique. Values must also be unique.
+- Keys must be unique. Multiple keys may map to the same value, which allows
+  several typographic variants to share one normalized representation.
 - A rule that maps a character to itself is invalid.
 
 For example, with `a=b` and `b=c`, original `a` becomes `b` and original `b`
@@ -35,14 +36,17 @@ Purra supports three sources of replacement rules:
 - `--preset <path>.preset` loads an external preset.
 - `--in-place-preset "a=b,c=d"` supplies rules directly on the command line.
 
-The initial built-in rules are:
+The built-in AI preset normalizes these groups:
 
-| Source | Destination |
+| Sources | Destination |
 | --- | --- |
-| em dash `—` | hyphen-minus `-` |
-| no-break space `U+00A0` | space |
-| left double quotation mark `“` | ASCII double quote `"` |
-| right single quotation mark `’` | ASCII apostrophe `'` |
+| all Unicode 17.0 `Dash_Punctuation` characters except ASCII hyphen-minus, plus minus sign `U+2212` | hyphen-minus `-` |
+| all Unicode 17.0 `Space_Separator` characters except ASCII space | space |
+| `«`, `»`, `“`, `”`, `„`, `‟` | ASCII double quote `"` |
+| `‘`, `’`, `‚`, `‛` | ASCII apostrophe `'` |
+
+Tabs, line and paragraph separators, zero-width spaces, and soft hyphens are
+not part of those groups and remain unchanged.
 
 Inline rules are comma-separated `K=V` pairs. External preset files contain one
 pair per line; blank lines and lines whose first non-whitespace character is `#`
@@ -57,7 +61,7 @@ The supported escapes are `\n`, `\r`, `\t`, `\0`, `\s`, `\\`, `\=`, `\,`,
 Purra must parse and validate the complete selected preset before reading or
 modifying any target input. It must fail without partial processing when the
 preset contains any syntax error, malformed pair, non-character key or value,
-duplicate key, duplicate value, or no-op mapping.
+duplicate key, or no-op mapping.
 
 An invalid preset is a usage/configuration error and exits with status `2`.
 

@@ -22,8 +22,8 @@ operations as a reusable library rather than coupling them to the CLI.
 
 ## Next Decisions
 
-- Expand the conservative built-in AI preset only with mappings that preserve
-  the unique-destination invariant.
+- Evaluate future AI preset additions against real generated-text samples and
+  keep the Unicode-versioned normalization groups documented.
 - Define representative real-world workload sizes, hardware baselines,
   throughput targets, memory limits, and performance regression thresholds.
 - Measure the checked-in benchmarks before deciding whether streaming, memory

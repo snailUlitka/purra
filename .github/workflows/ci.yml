@@ -82,13 +82,13 @@ jobs:
         run: |
           mkdir -p dist
           cp "target/${{ matrix.target }}/release/purra" dist/purra
-          tar -C dist -czf "purra-0.1.0-${{ matrix.platform }}.tar.gz" purra
+          tar -C dist -czf "purra-0.2.0-${{ matrix.platform }}.tar.gz" purra
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: purra-0.1.0-${{ matrix.platform }}
-          path: purra-0.1.0-${{ matrix.platform }}.tar.gz
+          name: purra-0.2.0-${{ matrix.platform }}
+          path: purra-0.2.0-${{ matrix.platform }}.tar.gz
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

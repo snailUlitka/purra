@@ -41,9 +41,9 @@ line and permit blank lines and `#` comments. Each side must decode to exactly
 one Unicode scalar value.
 
 Supported escapes are `\n`, `\r`, `\t`, `\0`, `\s` (space), `\\`, `\=`, `\,`,
-`\#`, and `\u{HEX}`. Duplicate sources, duplicate destinations, no-op mappings,
-malformed escapes, and multi-scalar graphemes such as a complete flag are
-rejected before any input is read or modified.
+`\#`, and `\u{HEX}`. Duplicate sources, no-op mappings, malformed escapes, and
+multi-scalar graphemes such as a complete flag are rejected before any input is
+read or modified. Multiple sources may share one destination.
 
 ## Library API
 

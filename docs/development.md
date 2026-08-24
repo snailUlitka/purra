@@ -97,9 +97,9 @@ After quality succeeds, native runners test and build release binaries for:
 
 | Artifact | Runner | Rust target |
 | --- | --- | --- |
-| `purra-0.1.0-macos-arm64` | `macos-26` | `aarch64-apple-darwin` |
-| `purra-0.1.0-linux-x86_64` | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` |
-| `purra-0.1.0-linux-arm64` | `ubuntu-24.04-arm` | `aarch64-unknown-linux-gnu` |
+| `purra-0.2.0-macos-arm64` | `macos-26` | `aarch64-apple-darwin` |
+| `purra-0.2.0-linux-x86_64` | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` |
+| `purra-0.2.0-linux-arm64` | `ubuntu-24.04-arm` | `aarch64-unknown-linux-gnu` |
 
 Each artifact contains a compressed `purra` executable and is retained for 14
 days. Update the embedded artifact version when preparing a later release.

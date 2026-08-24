@@ -36,7 +36,8 @@ mapped independently.
 
 Preset parsing produces all rules before an `Engine` is constructed. Validation
 rejects empty presets, malformed separators or escapes, sides that do not decode
-to one scalar, duplicate sources, duplicate destinations, and no-op mappings.
+to one scalar, duplicate sources, and no-op mappings. Multiple sources may share
+one destination so typographic variants can be normalized to the same character.
 The CLI constructs the preset and engine before reading any target input.
 
 ## File Processing
