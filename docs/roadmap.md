@@ -2,7 +2,7 @@
 
 This roadmap records confirmed direction, not delivery dates.
 
-## Implemented First Deliverable
+## Implemented 1.0 Release
 
 The stable-Rust macOS implementation now:
 
@@ -20,6 +20,15 @@ The stable-Rust macOS implementation now:
 It also exposes the replacement engine, preset handling, and safe file
 operations as a reusable library rather than coupling them to the CLI.
 
+## Stable 1.0 Contract
+
+Version 1.0 treats the documented CLI surface, preset grammar, replacement
+semantics, exit statuses, and public Rust API as stable. Backward-incompatible
+changes to those interfaces require a new major version.
+
+The minimum supported Rust version is 1.96.0 and is enforced by package
+metadata and the repository toolchain selection.
+
 ## Next Decisions
 
 - Evaluate future AI preset additions against real generated-text samples and
@@ -29,15 +38,11 @@ operations as a reusable library rather than coupling them to the CLI.
 - Measure the checked-in benchmarks before deciding whether streaming, memory
   mapping, a different lookup structure, or parallel directory traversal is
   justified.
-- Decide whether the preset grammar and CLI surface are ready to be treated as
-  stable public interfaces.
 
 ## Later Considerations
 
 - Support platforms beyond the developer's current macOS environment only
   after the first implementation establishes portable behavior and tests.
-- Set a minimum supported Rust version only when the dependency and release
-  strategy makes it useful.
 - Add platform-specific test coverage before claiming support beyond macOS.
 
 ## Current Non-Goals

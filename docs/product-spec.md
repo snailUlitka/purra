@@ -11,6 +11,13 @@ characters in large volumes of text. Its primary use cases are:
 The initial release targets the developer's current macOS environment and uses
 stable Rust.
 
+## Compatibility Contract
+
+As of version 1.0, the documented CLI options and modes, preset grammar,
+replacement semantics, exit statuses, and public Rust API are stable. Changes
+that break existing callers, commands, or valid presets require a new major
+version. Additive changes may be released in minor versions.
+
 ## Replacement Model
 
 - Every rule maps exactly one Unicode scalar value to exactly one Unicode scalar

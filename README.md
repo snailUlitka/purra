@@ -4,6 +4,17 @@ Purra is a Rust library and CLI for validated, non-transitive replacement of
 Unicode scalar values in text. It supports stdin/stdout pipelines, file output,
 safe in-place directory processing, and CI-friendly dry runs.
 
+## Installation
+
+Install the stable release directly from its GitHub tag:
+
+```sh
+cargo install --git https://github.com/snailUlitka/purra --tag v1.0.0 --locked purra
+```
+
+Cargo installs the executable into its configured binary directory, which is
+`$HOME/.cargo/bin` by default.
+
 ## Build
 
 ```sh
@@ -64,3 +75,11 @@ assert_eq!(result.count, 3);
 
 See [`docs/README.md`](docs/README.md) for the complete product, architecture,
 and development documentation.
+
+## Stability and License
+
+Version 1.0 stabilizes the CLI, preset grammar, exit status contract, and public
+Rust API. Backward-incompatible changes to those interfaces require a new major
+version.
+
+Purra is available under the [`MIT License`](LICENSE).

@@ -1,8 +1,13 @@
 [package]
 name = "purra"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2024"
+rust-version = "1.96"
 description = "High-performance Unicode character replacement engine and CLI"
+license = "MIT"
+repository = "https://github.com/snailUlitka/purra"
+homepage = "https://github.com/snailUlitka/purra"
+readme = "README.md"
 
 [dependencies]
 anstream = "1.0.0"

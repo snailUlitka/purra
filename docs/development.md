@@ -2,20 +2,20 @@
 
 ## Environment
 
-Purra is a single Rust binary package. The repository selects the stable Rust
-channel and requires the `rustfmt` and `clippy` components through
-`rust-toolchain.toml`.
+Purra is a single Rust binary package. The minimum supported Rust version is
+1.96.0. The repository selects that toolchain and requires the `rustfmt` and
+`clippy` components through `rust-toolchain.toml` so local and CI validation
+exercise the declared minimum.
 
-The scaffold was verified on Apple silicon macOS with:
+The 1.0 baseline is verified on Apple silicon macOS with:
 
 - `rustc 1.96.0`
 - `cargo 1.96.0`
 - `clippy 0.1.96`
 - `rustfmt 1.9.0`
 
-These versions describe the initial environment; they are not a minimum
-supported Rust version. `Cargo.lock` is part of the scaffold and should be
-version-controlled for reproducible application builds.
+`Cargo.lock` is version-controlled for reproducible application and
+installation builds.
 
 ## Dependency Roles
 
@@ -97,9 +97,10 @@ After quality succeeds, native runners test and build release binaries for:
 
 | Artifact | Runner | Rust target |
 | --- | --- | --- |
-| `purra-0.2.0-macos-arm64` | `macos-26` | `aarch64-apple-darwin` |
-| `purra-0.2.0-linux-x86_64` | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` |
-| `purra-0.2.0-linux-arm64` | `ubuntu-24.04-arm` | `aarch64-unknown-linux-gnu` |
+| `purra-macos-arm64` | `macos-26` | `aarch64-apple-darwin` |
+| `purra-linux-x86_64` | `ubuntu-24.04` | `x86_64-unknown-linux-gnu` |
+| `purra-linux-arm64` | `ubuntu-24.04-arm` | `aarch64-unknown-linux-gnu` |
 
 Each artifact contains a compressed `purra` executable and is retained for 14
-days. Update the embedded artifact version when preparing a later release.
+days. These workflow artifacts validate native release builds; installation is
+provided through Cargo from a versioned GitHub tag.
