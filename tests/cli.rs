@@ -24,8 +24,41 @@ fn rejects_a_grapheme_that_is_not_one_unicode_scalar() {
         .code(2)
         .stdout("")
         .stderr(predicate::str::contains(
-            "each side must decode to exactly one Unicode scalar value",
+            "source must decode to exactly one Unicode scalar value",
         ));
+}
+
+#[test]
+fn transforms_stdin_with_scalar_to_text_rules() {
+    cargo_bin_cmd!("purra")
+        .args(["--in-place-preset", r"…=...,≠=!\="])
+        .write_stdin("a…b ≠ c")
+        .assert()
+        .success()
+        .stdout("a...b != c")
+        .stderr("");
+}
+
+#[test]
+fn ascii_preset_includes_ai_typography_and_selected_expansions() {
+    cargo_bin_cmd!("purra")
+        .arg("--ascii-preset")
+        .write_stdin("“A—B…” ﬁ → ⇒ ⇐ ⇔ ≠ ≤ ≥ ≡")
+        .assert()
+        .success()
+        .stdout("\"A-B...\" fi -> ==> <== <==> != <= >= ===")
+        .stderr("");
+}
+
+#[test]
+fn ai_preset_does_not_gain_ascii_expansions() {
+    cargo_bin_cmd!("purra")
+        .arg("--ai-preset")
+        .write_stdin("… → ≠")
+        .assert()
+        .success()
+        .stdout("… → ≠")
+        .stderr("");
 }
 
 #[test]
@@ -109,6 +142,17 @@ fn dry_run_without_findings_exits_zero() {
         .success()
         .stdout("")
         .stderr("0 finding(s) in 0 input(s)\n");
+}
+
+#[test]
+fn dry_run_displays_text_replacement_and_counts_the_source_once() {
+    cargo_bin_cmd!("purra")
+        .args(["--ascii-preset", "--dry-run", "--color", "never"])
+        .write_stdin("é…")
+        .assert()
+        .code(1)
+        .stdout("<stdin>:1:2: … -> ...\n")
+        .stderr("1 finding(s) in 1 input(s)\n");
 }
 
 #[test]

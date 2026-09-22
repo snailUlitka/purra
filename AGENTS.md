@@ -1,8 +1,8 @@
 # Purra Agent Guide
 
 Purra is a high-performance Rust library and CLI for replacing configured
-Unicode characters in large text inputs. The first supported environment is
-macOS.
+Unicode scalar values with non-empty text in large text inputs. The first
+supported environment is macOS.
 
 ## Documentation
 
@@ -26,8 +26,9 @@ integration tests, and a Criterion benchmark target.
 
 ## Working Rules
 
-- Keep replacement semantics character-to-character and non-transitive unless
-  the product specification is deliberately revised.
+- Keep replacement sources limited to one Unicode scalar value, replacement
+  text non-empty, and application non-transitive unless the product
+  specification is deliberately revised.
 - Validate a complete preset before reading or modifying target files.
 - Preserve the documented atomic-write, permission, and backup guarantees when
   changing in-place processing.

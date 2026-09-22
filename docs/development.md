@@ -7,7 +7,7 @@ Purra is a single Rust binary package. The minimum supported Rust version is
 `clippy` components through `rust-toolchain.toml` so local and CI validation
 exercise the declared minimum.
 
-The 1.0 baseline is verified on Apple silicon macOS with:
+The 1.x baseline is verified on Apple silicon macOS with:
 
 - `rustc 1.96.0`
 - `cargo 1.96.0`
@@ -82,10 +82,10 @@ cargo bench --bench engine
 ```
 
 The benchmark target covers approximately 1 MiB clean ASCII, sparse AI
-typography, dense AI typography, regional-indicator, file-read-and-replace, and
-directory-discovery workloads. Do not treat these synthetic cases as a
-performance claim; record a hardware baseline and add representative real data
-before setting regression thresholds.
+typography, dense AI typography, dense scalar-to-text expansions,
+regional-indicator, file-read-and-replace, and directory-discovery workloads.
+Do not treat these synthetic cases as a performance claim; record a hardware
+baseline and add representative real data before setting regression thresholds.
 
 ## GitHub Actions
 

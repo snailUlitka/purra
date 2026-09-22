@@ -1,9 +1,15 @@
+#![allow(deprecated)]
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 use thiserror::Error;
 
 /// A single non-transitive Unicode scalar-value replacement.
+#[deprecated(
+    since = "1.1.0",
+    note = "use TextRule; Rule will be replaced by the scalar-to-text Rule API in 2.0"
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rule {
     pub from: char,
@@ -44,6 +50,10 @@ impl Replacement<'_> {
 }
 
 /// A replacement found in the original input.
+#[deprecated(
+    since = "1.1.0",
+    note = "use TextFinding; Finding will be replaced by the text-capable finding API in 2.0"
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Finding {
     pub original: char,
@@ -60,6 +70,10 @@ pub struct Finding {
 ///
 /// ASCII rules use a direct lookup table. Non-ASCII rules use a sorted slice
 /// with binary search, keeping lookup deterministic without allocating per input.
+#[deprecated(
+    since = "1.1.0",
+    note = "use TextEngine; Engine will become text-capable under the Engine name in 2.0"
+)]
 #[derive(Debug, Clone)]
 pub struct Engine {
     ascii: [Option<char>; 128],

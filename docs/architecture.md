@@ -4,41 +4,50 @@
 
 Purra is one Cargo package with both a reusable library and a binary target:
 
-- `src/engine.rs` owns the pure replacement algorithm and finding positions.
-- `src/preset.rs` owns preset grammar, complete validation, loading, and the
-  built-in AI preset.
+- `src/text_engine.rs` owns the primary scalar-to-text replacement algorithm and
+  finding positions.
+- `src/text_preset.rs` owns the extended preset grammar, complete validation,
+  loading, and the built-in AI and ASCII presets.
+- `src/engine.rs` and `src/preset.rs` retain the deprecated 1.0 scalar-to-scalar
+  library API until 2.0.
 - `src/files.rs` owns file classification, deterministic directory discovery,
   atomic output, in-place replacement, and backups.
 - `src/main.rs` owns only CLI argument mapping, stdin/stdout interaction,
   confirmation, diagnostic rendering, and process exit statuses.
 
 Another interface should depend on the public library types rather than call or
-copy CLI code. `Engine` is independent of the filesystem and can be retained and
-reused across many inputs.
+copy CLI code. `TextEngine` is independent of the filesystem and can be retained
+and reused across many inputs.
 
 ## Engine
 
-`Engine::new` accepts validated `Rule` values. ASCII sources are compiled into a
-128-entry direct lookup table. Non-ASCII sources are stored as a sorted boxed
-slice and found with binary search. Replacement walks the original UTF-8 input
-once after locating the first match and returns borrowed input when unchanged.
+`TextEngine::new` accepts validated `TextRule` values. ASCII sources are compiled
+into a 128-entry direct lookup table. Non-ASCII sources are stored as a sorted
+boxed slice and found with binary search. Replacement walks the original UTF-8
+input once after locating the first match and returns borrowed input when
+unchanged.
 
 Every lookup uses the original input scalar value, so rule chains are
-non-transitive. Findings contain the original and replacement scalar, byte
-offset, and one-based line and scalar-column position.
+non-transitive even when replacement text contains another configured source.
+Findings contain the original scalar, replacement text, byte offset, and
+one-based line and scalar-column position. A finding count measures matched
+source scalars, not the number of produced scalars.
 
 Purra deliberately defines a character as a Unicode scalar value, not a user-
 perceived grapheme cluster. A flag such as `🇺🇸` contains two regional-indicator
-scalars. A whole flag cannot be one side of a rule, but its two components can be
-mapped independently.
+scalars. A whole flag cannot be a rule source, but it can be replacement text.
 
 ## Preset Validation
 
-Preset parsing produces all rules before an `Engine` is constructed. Validation
-rejects empty presets, malformed separators or escapes, sides that do not decode
-to one scalar, duplicate sources, and no-op mappings. Multiple sources may share
-one destination so typographic variants can be normalized to the same character.
-The CLI constructs the preset and engine before reading any target input.
+Preset parsing produces all rules before a `TextEngine` is constructed.
+Validation rejects empty presets, malformed separators or escapes, sources that
+do not decode to one scalar, empty replacements, duplicate sources, and no-op
+mappings. Multiple sources may share replacement text. The CLI constructs the
+preset and engine before reading any target input.
+
+The 1.0 `Rule`, `Engine`, `Finding`, and `Preset` types remain available and
+deprecated in 1.x. Version 2.0 is planned to remove them and rename the text-
+capable types to the unprefixed names, leaving one scalar-to-text API.
 
 ## File Processing
 

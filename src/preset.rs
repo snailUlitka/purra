@@ -1,53 +1,18 @@
+#![allow(deprecated)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
 use crate::engine::{Engine, EngineError, Rule};
-
-// Unicode 17.0 General_Category=Dash_Punctuation, excluding the normalized
-// ASCII HYPHEN-MINUS. MINUS SIGN is included because it is commonly used as a
-// typographic hyphen despite belonging to General_Category=Math_Symbol.
-const AI_DASHES: &[char] = &[
-    '\u{058a}',
-    '\u{05be}',
-    '\u{1400}',
-    '\u{1806}',
-    '\u{2010}',
-    '\u{2011}',
-    '\u{2012}',
-    '\u{2013}',
-    '\u{2014}',
-    '\u{2015}',
-    '\u{2212}',
-    '\u{2e17}',
-    '\u{2e1a}',
-    '\u{2e3a}',
-    '\u{2e3b}',
-    '\u{2e40}',
-    '\u{2e5d}',
-    '\u{301c}',
-    '\u{3030}',
-    '\u{30a0}',
-    '\u{fe31}',
-    '\u{fe32}',
-    '\u{fe58}',
-    '\u{fe63}',
-    '\u{ff0d}',
-    '\u{10d6e}',
-    '\u{10ead}',
-];
-
-// Unicode 17.0 General_Category=Space_Separator, excluding ASCII SPACE.
-const AI_SPACES: &[char] = &[
-    '\u{00a0}', '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}', '\u{2004}', '\u{2005}',
-    '\u{2006}', '\u{2007}', '\u{2008}', '\u{2009}', '\u{200a}', '\u{202f}', '\u{205f}', '\u{3000}',
-];
-
-const AI_DOUBLE_QUOTES: &[char] = &['\u{00ab}', '\u{00bb}', '“', '”', '„', '‟'];
-const AI_SINGLE_QUOTES: &[char] = &['‘', '’', '‚', '‛'];
+use crate::text_preset::{AI_DASHES, AI_DOUBLE_QUOTES, AI_SINGLE_QUOTES, AI_SPACES};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated(
+    since = "1.1.0",
+    note = "use TextPreset; Preset will become text-capable under the Preset name in 2.0"
+)]
 pub struct Preset {
     rules: Vec<Rule>,
 }

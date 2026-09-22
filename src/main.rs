@@ -10,7 +10,7 @@ use purra::files::{
     FileError, SkipReason, TextFile, collect_directory_files, read_text, replace_in_place,
     write_atomic,
 };
-use purra::{Engine, Finding, Preset, PresetError, PresetLoadError};
+use purra::{TextEngine, TextFinding, TextPreset, TextPresetError, TextPresetLoadError};
 use thiserror::Error;
 
 const EXIT_FINDINGS: u8 = 1;
@@ -21,16 +21,20 @@ const EXIT_RUNTIME: u8 = 3;
 #[command(
     name = "purra",
     version,
-    about = "Replace configured Unicode characters in text",
+    about = "Replace configured Unicode scalar values with text",
     group = ArgGroup::new("preset-source")
         .required(true)
         .multiple(false)
-        .args(["ai_preset", "preset", "inline_preset"])
+        .args(["ai_preset", "ascii_preset", "preset", "inline_preset"])
 )]
 struct Cli {
     /// Use the built-in AI typography preset.
     #[arg(long, action = ArgAction::SetTrue)]
     ai_preset: bool,
+
+    /// Use the AI preset plus selected ASCII text expansions.
+    #[arg(long, action = ArgAction::SetTrue)]
+    ascii_preset: bool,
 
     /// Load one K=V rule per line from a preset file.
     #[arg(long, value_name = "FILE")]
@@ -78,9 +82,9 @@ enum CliError {
     #[error("{0}")]
     Usage(String),
     #[error(transparent)]
-    Preset(#[from] PresetError),
+    Preset(#[from] TextPresetError),
     #[error(transparent)]
-    PresetLoad(#[from] PresetLoadError),
+    PresetLoad(#[from] TextPresetLoadError),
     #[error(transparent)]
     File(#[from] FileError),
     #[error(transparent)]
@@ -128,13 +132,15 @@ fn run(cli: Cli) -> Result<ExitCode, CliError> {
     }
 }
 
-fn load_engine(cli: &Cli) -> Result<Engine, CliError> {
+fn load_engine(cli: &Cli) -> Result<TextEngine, CliError> {
     let preset = if cli.ai_preset {
-        Preset::ai()
+        TextPreset::ai()
+    } else if cli.ascii_preset {
+        TextPreset::ascii()
     } else if let Some(path) = &cli.preset {
-        Preset::load(path)?
+        TextPreset::load(path)?
     } else if let Some(inline) = &cli.inline_preset {
-        Preset::parse_inline(inline)?
+        TextPreset::parse_inline(inline)?
     } else {
         unreachable!("clap requires exactly one preset source")
     };
@@ -155,7 +161,7 @@ fn validate_path_options(cli: &Cli) -> Result<(), CliError> {
     Ok(())
 }
 
-fn run_stdin(engine: &Engine, cli: &Cli) -> Result<ExitCode, CliError> {
+fn run_stdin(engine: &TextEngine, cli: &Cli) -> Result<ExitCode, CliError> {
     if cli.recursive || cli.force {
         return Err(CliError::Usage(
             "--recursive and --force cannot be used with stdin".to_owned(),
@@ -184,7 +190,7 @@ fn run_stdin(engine: &Engine, cli: &Cli) -> Result<ExitCode, CliError> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn run_file_to_stdout(engine: &Engine, input: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
+fn run_file_to_stdout(engine: &TextEngine, input: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
     if cli.recursive || cli.force {
         return Err(CliError::Usage(
             "--recursive and --force require a directory input".to_owned(),
@@ -212,7 +218,7 @@ fn run_file_to_stdout(engine: &Engine, input: &Path, cli: &Cli) -> Result<ExitCo
 }
 
 fn run_file_to_file(
-    engine: &Engine,
+    engine: &TextEngine,
     input: &Path,
     output: &Path,
     cli: &Cli,
@@ -243,7 +249,7 @@ fn run_file_to_file(
     Ok(ExitCode::SUCCESS)
 }
 
-fn run_directory(engine: &Engine, directory: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
+fn run_directory(engine: &TextEngine, directory: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
     let paths = collect_directory_files(directory, cli.recursive)?;
     let mut summary = Summary::default();
 
@@ -316,7 +322,7 @@ fn findings_exit(count: usize) -> ExitCode {
     }
 }
 
-fn print_findings(path: &Path, findings: &[Finding], color: ColorMode) -> io::Result<()> {
+fn print_findings(path: &Path, findings: &[TextFinding<'_>], color: ColorMode) -> io::Result<()> {
     let mut output = stdout_stream(color);
     let path_style = Style::new().fg_color(Some(AnsiColor::Magenta.into()));
     let position_style = Style::new().fg_color(Some(AnsiColor::Green.into()));
@@ -335,7 +341,7 @@ fn print_findings(path: &Path, findings: &[Finding], color: ColorMode) -> io::Re
             finding_style.render(),
             display_character(finding.original),
             finding_style.render_reset(),
-            display_character(finding.replacement),
+            display_text(finding.replacement),
             path = path.display(),
         )?;
     }
@@ -399,6 +405,10 @@ fn display_character(character: char) -> String {
         character if character.is_control() => character.escape_default().to_string(),
         character => character.to_string(),
     }
+}
+
+fn display_text(text: &str) -> String {
+    text.chars().map(display_character).collect()
 }
 
 fn stream_choice(color: ColorMode, is_terminal: bool) -> StreamColorChoice {

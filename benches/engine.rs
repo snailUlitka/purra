@@ -3,17 +3,19 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use purra::files::{TextFile, collect_directory_files, read_text};
-use purra::{Engine, Preset, Rule};
+use purra::{TextEngine, TextPreset, TextRule};
 use tempfile::tempdir;
 
 const MIB: usize = 1024 * 1024;
 
 fn engine_benchmarks(criterion: &mut Criterion) {
-    let ai = Preset::ai().engine();
-    let flags = Engine::new([Rule::new('🇺', '🇨'), Rule::new('🇸', '🇦')]).unwrap();
+    let ai = TextPreset::ai().engine();
+    let ascii = TextPreset::ascii().engine();
+    let flags = TextEngine::new([TextRule::new('🇺', "🇨"), TextRule::new('🇸', "🇦")]).unwrap();
     let clean_ascii = "plain text and numbers 1234567890\n".repeat(MIB / 34);
     let sparse_unicode = "ordinary text with one em dash — near the end\n".repeat(MIB / 48);
     let dense_unicode = "—’“\u{a0}".repeat(MIB / 10);
+    let dense_expansions = "…ﬁ→≠".repeat(MIB / 11);
     let flag_text = "🇺🇸".repeat(MIB / 8);
 
     let mut group = criterion.benchmark_group("engine_replace");
@@ -21,6 +23,7 @@ fn engine_benchmarks(criterion: &mut Criterion) {
         ("clean_ascii", &ai, &clean_ascii),
         ("sparse_ai_unicode", &ai, &sparse_unicode),
         ("dense_ai_unicode", &ai, &dense_unicode),
+        ("dense_ascii_expansions", &ascii, &dense_expansions),
         ("regional_indicators", &flags, &flag_text),
     ] {
         group.throughput(Throughput::Bytes(input.len() as u64));
@@ -36,7 +39,7 @@ fn engine_benchmarks(criterion: &mut Criterion) {
 }
 
 fn file_benchmarks(criterion: &mut Criterion) {
-    let engine = Preset::ai().engine();
+    let engine = TextPreset::ai().engine();
     let directory = tempdir().unwrap();
     let input = directory.path().join("large.txt");
     let input_text = "ordinary text with one em dash — near the end\n".repeat(MIB / 48);

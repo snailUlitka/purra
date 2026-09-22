@@ -13,23 +13,24 @@ stable Rust.
 
 ## Compatibility Contract
 
-As of version 1.0, the documented CLI options and modes, preset grammar,
-replacement semantics, exit statuses, and public Rust API are stable. Changes
-that break existing callers, commands, or valid presets require a new major
-version. Additive changes may be released in minor versions.
+Version 1.1 retains every stable 1.0 CLI mode, valid preset, exit status, and
+public Rust API. It adds scalar-to-text rules and an ASCII preset. The 1.0
+scalar-to-scalar library types are deprecated but remain functional until 2.0.
+Changes that break existing callers, commands, or valid presets require a new
+major version. Additive changes may be released in minor versions.
 
 ## Replacement Model
 
-- Every rule maps exactly one Unicode scalar value to exactly one Unicode scalar
-  value. A multi-scalar grapheme such as a complete flag is not one character
-  under this contract.
-- Rules are literal; regular expressions and multi-character strings are out of
+- Every rule maps exactly one Unicode scalar value to a non-empty replacement
+  string. A multi-scalar grapheme such as a complete flag cannot be a source but
+  may be replacement text.
+- Rules are literal; regular expressions and multi-scalar sources are out of
   scope.
 - All rules are applied as one non-transitive mapping. A character produced by
   a rule is not processed again during the same run.
 - Keys must be unique. Multiple keys may map to the same value, which allows
   several typographic variants to share one normalized representation.
-- A rule that maps a character to itself is invalid.
+- An empty replacement and a rule that maps a character to itself are invalid.
 
 For example, with `a=b` and `b=c`, original `a` becomes `b` and original `b`
 becomes `c`; the produced `b` is not processed a second time. Processing is
@@ -37,9 +38,10 @@ defined by each original input character only.
 
 ## Presets
 
-Purra supports three sources of replacement rules:
+Purra supports four sources of replacement rules:
 
 - `--ai-preset` selects the built-in preset shipped with the tool.
+- `--ascii-preset` selects the AI preset plus explicit ASCII expansions.
 - `--preset <path>.preset` loads an external preset.
 - `--in-place-preset "a=b,c=d"` supplies rules directly on the command line.
 
@@ -55,6 +57,29 @@ The built-in AI preset normalizes these groups:
 Tabs, line and paragraph separators, zero-width spaces, and soft hyphens are
 not part of those groups and remain unchanged.
 
+The built-in ASCII preset includes every AI preset rule and additionally
+normalizes these groups:
+
+| Sources | Destination |
+| --- | --- |
+| `…` | `...` |
+| `‥` | `..` |
+| `ﬀ`, `ﬁ`, `ﬂ`, `ﬃ`, `ﬄ`, `ﬅ`, `ﬆ` | their ASCII letter sequences |
+| `→`, `⟶` | `->` |
+| `←`, `⟵` | `<-` |
+| `↔`, `⟷` | `<->` |
+| `⇒`, `⟹` | `==>` |
+| `⇐`, `⟸` | `<==` |
+| `⇔`, `⟺` | `<==>` |
+| `≠` | `!=` |
+| `≤` | `<=` |
+| `≥` | `>=` |
+| `≡` | `===` |
+
+The ASCII preset deliberately leaves `≈`, `×`, `÷`, `±`, `¬`, `∧`, `∨`, `Æ`,
+`Œ`, and `ß` unchanged because their ASCII representation is ambiguous or
+language-dependent.
+
 Inline rules are comma-separated `K=V` pairs. External preset files contain one
 pair per line; blank lines and lines whose first non-whitespace character is `#`
 are ignored. Surrounding whitespace is ignored, so a literal space must use
@@ -63,12 +88,15 @@ are ignored. Surrounding whitespace is ignored, so a literal space must use
 The supported escapes are `\n`, `\r`, `\t`, `\0`, `\s`, `\\`, `\=`, `\,`,
 `\#`, and `\u{HEX}` with one to six hexadecimal digits.
 
+An unescaped `=` separates source and replacement. A replacement containing
+`=` must escape it; for example, `≠=!\=` defines `≠` to `!=`.
+
 ### Validation Guarantee
 
 Purra must parse and validate the complete selected preset before reading or
 modifying any target input. It must fail without partial processing when the
-preset contains any syntax error, malformed pair, non-character key or value,
-duplicate key, or no-op mapping.
+preset contains any syntax error, malformed pair, source that is not exactly one
+Unicode scalar, empty replacement, duplicate key, or no-op mapping.
 
 An invalid preset is a usage/configuration error and exits with status `2`.
 
@@ -78,6 +106,7 @@ The intended interfaces include:
 
 ```sh
 cat file | purra --ai-preset
+cat file | purra --ascii-preset
 purra --ai-preset input output
 purra --ai-preset input > output
 purra --preset custom.preset input output
@@ -139,6 +168,6 @@ Performance comparable to Ruff is a product goal, but it is not yet a measurable
 acceptance criterion. Dataset sizes, hardware baselines, throughput targets,
 memory limits, and regression thresholds must be defined from real workloads
 before performance claims are made. The repository includes compile-checked
-Criterion cases for clean ASCII, sparse and dense AI typography,
-regional-indicator flag scalars, file loading plus replacement, and directory
-discovery; results have not yet been recorded.
+Criterion cases for clean ASCII, sparse and dense AI typography, dense
+scalar-to-text expansion, regional-indicator flag scalars, file loading plus
+replacement, and directory discovery; results have not yet been recorded.
