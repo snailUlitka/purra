@@ -34,6 +34,19 @@ text while keeping each source exactly one Unicode scalar. It adds:
 The 1.0 `Rule`, `Engine`, `Finding`, and `Preset` types remain functional and
 are deprecated with migration guidance.
 
+## Implemented 1.2 Release
+
+- CLI directory scans respect root and nested `.gitignore` by default, with or
+  without recursion and during dry runs.
+- Repeatable `--ignore <GLOB>` adds gitignore-style exclusions;
+  `--no-gitignore` disables ignore-file loading without disabling explicit rules.
+- Complete discovery and rule validation precede target processing. Excluded
+  directories are pruned and invalid applicable rules stop the run.
+- `DirectoryOptions`, `DirectoryError`, and
+  `collect_directory_files_with_options` expose filtering through the library.
+  The original file API retains its unfiltered discovery behavior.
+- Compile-checked benchmarks cover nested ignore rules and subtree pruning.
+
 ## Stable 1.x Contract
 
 Version 1.0 treats the documented CLI surface, preset grammar, replacement
@@ -41,6 +54,10 @@ semantics, exit statuses, and public Rust API as stable. Backward-incompatible
 changes to those interfaces require a new major version. Version 1.1 only adds
 accepted preset values, CLI options, and public types; existing valid inputs
 retain their previous behavior.
+
+Version 1.2 deliberately revises CLI directory selection. `--no-gitignore`
+restores previous selection when no explicit exclusions are supplied. Existing
+public Rust APIs remain unchanged.
 
 The minimum supported Rust version is 1.96.0 and is enforced by package
 metadata and the repository toolchain selection.

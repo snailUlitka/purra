@@ -2,7 +2,10 @@ use std::fs;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use purra::files::{TextFile, collect_directory_files, read_text};
+use purra::files::{
+    DirectoryOptions, TextFile, collect_directory_files, collect_directory_files_with_options,
+    read_text,
+};
 use purra::{TextEngine, TextPreset, TextRule};
 use tempfile::tempdir;
 
@@ -72,5 +75,64 @@ fn file_benchmarks(criterion: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, engine_benchmarks, file_benchmarks);
+fn directory_filter_benchmarks(criterion: &mut Criterion) {
+    let directory = tempdir().unwrap();
+    let nested = directory.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join(".gitignore"), "*.tmp\n").unwrap();
+    for index in 0..16 {
+        let child = nested.join(format!("section-{index:02}"));
+        fs::create_dir(&child).unwrap();
+        fs::write(child.join(".gitignore"), "!keep.tmp\n").unwrap();
+        fs::write(child.join("keep.tmp"), "plain text\n").unwrap();
+        for file in 0..16 {
+            let extension = if file % 2 == 0 { "txt" } else { "tmp" };
+            fs::write(
+                child.join(format!("file-{file:02}.{extension}")),
+                "plain text\n",
+            )
+            .unwrap();
+        }
+    }
+
+    let pruning = directory.path().join("pruning");
+    let cache = pruning.join("cache");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(pruning.join("input.txt"), "plain text\n").unwrap();
+    for index in 0..16 {
+        let child = cache.join(format!("shard-{index:02}"));
+        fs::create_dir(&child).unwrap();
+        for file in 0..128 {
+            fs::write(child.join(format!("entry-{file:03}.txt")), "plain text\n").unwrap();
+        }
+    }
+    let rules = DirectoryOptions {
+        recursive: true,
+        ..DirectoryOptions::default()
+    };
+    let prune = DirectoryOptions {
+        ignores: vec!["/cache/".into()],
+        ..rules.clone()
+    };
+    let mut group = criterion.benchmark_group("directory_filters");
+    for (name, root, options) in [
+        ("nested_gitignore", &nested, &rules),
+        ("unpruned_2048_file_subtree", &pruning, &rules),
+        ("pruned_2048_file_subtree", &pruning, &prune),
+    ] {
+        group.bench_function(name, |bencher| {
+            bencher.iter(|| {
+                collect_directory_files_with_options(black_box(root), black_box(options)).unwrap()
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    engine_benchmarks,
+    file_benchmarks,
+    directory_filter_benchmarks
+);
 criterion_main!(benches);

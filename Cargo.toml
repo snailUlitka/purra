@@ -1,6 +1,6 @@
 [package]
 name = "purra"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 rust-version = "1.96"
 description = "High-performance Unicode scalar-to-text replacement engine and CLI"
@@ -13,6 +13,7 @@ readme = "README.md"
 anstream = "1.0.0"
 anstyle = "1.0.14"
 clap = { version = "4.6.6", features = ["derive"] }
+ignore = "0.4.33"
 tempfile = "3.27.0"
 thiserror = "2.0.20"
 walkdir = "2.5.0"

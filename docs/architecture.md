@@ -11,7 +11,7 @@ Purra is one Cargo package with both a reusable library and a binary target:
 - `src/engine.rs` and `src/preset.rs` retain the deprecated 1.0 scalar-to-scalar
   library API until 2.0.
 - `src/files.rs` owns file classification, deterministic directory discovery,
-  atomic output, in-place replacement, and backups.
+  hierarchical ignore rules, atomic output, in-place replacement, and backups.
 - `src/main.rs` owns only CLI argument mapping, stdin/stdout interaction,
   confirmation, diagnostic rendering, and process exit statuses.
 
@@ -55,6 +55,27 @@ Files are currently read into memory. A NUL byte classifies input as binary;
 otherwise the complete content must be valid UTF-8. Directory discovery is
 deterministic, includes hidden regular files, does not follow symbolic links,
 and filters Purra-generated backup files.
+
+The CLI uses `collect_directory_files_with_options` with `DirectoryOptions`:
+recursion disabled, `.gitignore` enabled, and no explicit exclusions by default.
+`DirectoryError` distinguishes invalid rules from file failures without adding
+variants to the existing `FileError`. The legacy `collect_directory_files`
+function retains its original unfiltered behavior.
+
+Filtered discovery retains `WalkDir` and uses `ignore::gitignore::GitignoreBuilder`
+to compile patterns. Explicit exclusions are compiled once, reject negation,
+and take priority over ignore-file rules. A depth-scoped stack holds matchers
+for `.gitignore` in the root and visited directories. The deepest matching
+scope decides selection; leaving a directory removes its scope. Excluded
+directories are pruned before loading their rules. Parent and global ignore
+sources are never consulted, and a Git repository is not required.
+
+Ignore files are inspected without following symbolic links and read line by
+line so errors include their source location. Every compilation failure aborts
+discovery, including failures after valid rules. Discovery finishes and sorts
+the complete list before the CLI reads any target content, asks for confirmation,
+or writes files. `--no-gitignore` skips ignore-file loading while retaining
+explicit exclusions. Hidden control files remain eligible as normal inputs.
 
 For an in-place replacement, the library:
 

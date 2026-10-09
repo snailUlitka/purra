@@ -19,6 +19,11 @@ scalar-to-scalar library types are deprecated but remain functional until 2.0.
 Changes that break existing callers, commands, or valid presets require a new
 major version. Additive changes may be released in minor versions.
 
+Version 1.2 deliberately revises CLI directory selection to respect
+`.gitignore` by default. `--no-gitignore` restores previous selection when no
+explicit exclusions are supplied. This accepted default change does not alter
+the existing public Rust APIs, preset grammar, or replacement semantics.
+
 ## Replacement Model
 
 - Every rule maps exactly one Unicode scalar value to a non-empty replacement
@@ -135,6 +140,54 @@ File-to-file output is also written atomically. An existing output keeps its own
 permissions; a new output inherits the input permissions. When input and output
 resolve to the same file, the operation uses the in-place backup workflow.
 
+## Directory Exclusions
+
+Directory scans respect `.gitignore` in the input directory and, with `-r`,
+visited subdirectories. This also applies without `-r` and during `--dry-run`.
+Each file's patterns are relative to its containing directory. Later matching
+rules in one file take precedence; rules in deeper directories override
+matching ancestor rules. Comments, escaping, and `!` negation use gitignore
+semantics. An excluded directory is pruned, so its contents and nested ignore
+files are not visited and cannot be re-included by negation.
+
+The repeatable `--ignore <GLOB>` adds exclusions relative to the scan root,
+using the same glob syntax rather than Rust regex or filesystem-based type
+detection. For example:
+
+```sh
+purra --ai-preset -r -f . --ignore '*.pdf' --ignore '.git/'
+purra --ai-preset -r -f docs/ --ignore '/assets/' --ignore 'drafts/old.txt'
+purra --ai-preset -r --dry-run . --no-gitignore --ignore '*.pdf'
+```
+
+A leading `/` anchors to the scan root, not the filesystem root. Patterns with
+no leading or internal `/` can match names at any depth; a trailing `/`
+restricts the pattern to directories and excludes their subtrees. Paths need
+not exist for a pattern to be valid. Literal glob characters must be escaped.
+All explicit exclusions accumulate independently of flag order and take
+precedence over every `.gitignore` rule. An unescaped leading `!` is invalid in
+`--ignore`; `\!` matches a literal exclamation mark.
+
+`--no-gitignore` disables loading every `.gitignore` while keeping explicit
+exclusions active. Both new flags require one directory input; stdin,
+file-to-stdout, and file-to-file modes reject them with exit status `2`.
+Explicit file inputs continue to bypass `.gitignore` selection.
+
+Only `.gitignore` inside the scan tree is loaded. Parent ignore files, global
+Git settings, `.git/info/exclude`, and `.ignore` do not affect selection. The
+rules work outside Git repositories and apply regardless of tracked status.
+Hidden files, including `.gitignore` itself, remain eligible unless excluded;
+there is no implicit exclusion of `.git`. Symbolic-link ignore files are not
+read. A present non-regular, non-symlink `.gitignore` is a runtime error.
+
+The CLI validates the preset first, compiles explicit exclusions, and collects
+the complete sorted file list before reading target content or making changes.
+An invalid applicable ignore rule aborts with status `2`; diagnostics identify
+the CLI pattern or ignore file and line. Ignore-file inspection, reading
+(including invalid UTF-8), and traversal failures use status `3`. Rules inside
+pruned directories are not validated. Excluded entries produce no findings,
+confirmation prompts, skip warnings, updates, or backups.
+
 ## File Classification
 
 - Binary files are ignored.
@@ -170,4 +223,5 @@ memory limits, and regression thresholds must be defined from real workloads
 before performance claims are made. The repository includes compile-checked
 Criterion cases for clean ASCII, sparse and dense AI typography, dense
 scalar-to-text expansion, regional-indicator flag scalars, file loading plus
-replacement, and directory discovery; results have not yet been recorded.
+replacement, directory discovery, nested `.gitignore` rules, and pruning a
+2,048-file subtree; results have not yet been recorded.

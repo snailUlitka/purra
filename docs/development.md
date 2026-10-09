@@ -25,6 +25,8 @@ by the product specification:
 - `clap` parses the command-line interface.
 - `anstream` and `anstyle` provide terminal-aware styled diagnostics.
 - `walkdir` supports recursive and non-recursive directory traversal.
+- `ignore` compiles gitignore-style globs for hierarchical `.gitignore` rules
+  and explicit exclusions; Purra retains control over traversal and errors.
 - `tempfile` supports atomic replacement workflows.
 - `thiserror` defines typed errors across the public library boundary.
 
@@ -84,6 +86,9 @@ cargo bench --bench engine
 The benchmark target covers approximately 1 MiB clean ASCII, sparse AI
 typography, dense AI typography, dense scalar-to-text expansions,
 regional-indicator, file-read-and-replace, and directory-discovery workloads.
+Directory-filter cases cover nested `.gitignore` rules and both visiting and
+pruning a 2,048-file subtree. Fixtures are created outside the timed iterations;
+discovery includes rule loading and compilation.
 Do not treat these synthetic cases as a performance claim; record a hardware
 baseline and add representative real data before setting regression thresholds.
 

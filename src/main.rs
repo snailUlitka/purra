@@ -7,8 +7,8 @@ use anstream::{AutoStream, ColorChoice as StreamColorChoice};
 use anstyle::{AnsiColor, Style};
 use clap::{ArgAction, ArgGroup, Parser, ValueEnum};
 use purra::files::{
-    FileError, SkipReason, TextFile, collect_directory_files, read_text, replace_in_place,
-    write_atomic,
+    DirectoryError, DirectoryOptions, FileError, SkipReason, TextFile,
+    collect_directory_files_with_options, read_text, replace_in_place, write_atomic,
 };
 use purra::{TextEngine, TextFinding, TextPreset, TextPresetError, TextPresetLoadError};
 use thiserror::Error;
@@ -52,6 +52,15 @@ struct Cli {
     #[arg(short = 'r', long)]
     recursive: bool,
 
+    /// Exclude a gitignore-style glob relative to the input directory (repeatable).
+    /// Leading / anchors to the scan root; ! negation is not accepted.
+    #[arg(long = "ignore", value_name = "GLOB", action = ArgAction::Append)]
+    ignores: Vec<String>,
+
+    /// Disable root and nested .gitignore rules; explicit --ignore still applies.
+    #[arg(long)]
+    no_gitignore: bool,
+
     /// Replace changed directory entries without y/n confirmation.
     #[arg(short = 'f', long)]
     force: bool,
@@ -88,6 +97,8 @@ enum CliError {
     #[error(transparent)]
     File(#[from] FileError),
     #[error(transparent)]
+    Directory(#[from] DirectoryError),
+    #[error(transparent)]
     Io(#[from] io::Error),
 }
 
@@ -96,6 +107,8 @@ impl CliError {
         match self {
             Self::Usage(_) | Self::Preset(_) | Self::PresetLoad(_) => EXIT_CONFIGURATION,
             Self::File(_) | Self::Io(_) => EXIT_RUNTIME,
+            Self::Directory(DirectoryError::File(_)) => EXIT_RUNTIME,
+            Self::Directory(_) => EXIT_CONFIGURATION,
         }
     }
 }
@@ -148,6 +161,13 @@ fn load_engine(cli: &Cli) -> Result<TextEngine, CliError> {
 }
 
 fn validate_path_options(cli: &Cli) -> Result<(), CliError> {
+    if (!cli.ignores.is_empty() || cli.no_gitignore)
+        && (cli.paths.len() != 1 || !is_directory(&cli.paths[0])?)
+    {
+        return Err(CliError::Usage(
+            "--ignore and --no-gitignore require one directory input".to_owned(),
+        ));
+    }
     if cli.paths.len() == 2 && cli.dry_run {
         return Err(CliError::Usage(
             "--dry-run does not accept an output path".to_owned(),
@@ -250,7 +270,12 @@ fn run_file_to_file(
 }
 
 fn run_directory(engine: &TextEngine, directory: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
-    let paths = collect_directory_files(directory, cli.recursive)?;
+    let options = DirectoryOptions {
+        recursive: cli.recursive,
+        respect_gitignore: !cli.no_gitignore,
+        ignores: cli.ignores.clone(),
+    };
+    let paths = collect_directory_files_with_options(directory, &options)?;
     let mut summary = Summary::default();
 
     for path in paths {

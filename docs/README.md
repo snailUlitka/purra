@@ -7,13 +7,14 @@ deliberately deferred work.
 ## Documents
 
 - [`product-spec.md`](product-spec.md) defines the intended user-facing behavior,
-  replacement rules, safety guarantees, and exit status contract.
+  replacement rules, directory exclusions, safety guarantees, and exit status
+  contract.
 - [`roadmap.md`](roadmap.md) records delivered scope and deliberately deferred
   decisions.
 - [`development.md`](development.md) records the verified Rust toolchain,
   dependency roles, and local validation workflow.
 - [`architecture.md`](architecture.md) describes the library-first module
-  boundaries, data flow, and safe-write sequence.
+  boundaries, ignore-rule discovery, data flow, and safe-write sequence.
 
 ## Maintenance
 

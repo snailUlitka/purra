@@ -1,8 +1,9 @@
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Permissions};
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use walkdir::WalkDir;
@@ -42,6 +43,42 @@ pub enum FileError {
     OutputIsSymbolicLink(PathBuf),
 }
 
+/// Options for directory discovery with gitignore-style exclusions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectoryOptions {
+    /// Descend into subdirectories. Disabled by default.
+    pub recursive: bool,
+    /// Read `.gitignore` in the root and visited subdirectories. Enabled by default.
+    pub respect_gitignore: bool,
+    /// Additional exclusion globs relative to the scan root. Negation is rejected.
+    pub ignores: Vec<String>,
+}
+
+impl Default for DirectoryOptions {
+    fn default() -> Self {
+        Self {
+            recursive: false,
+            respect_gitignore: true,
+            ignores: Vec::new(),
+        }
+    }
+}
+
+/// Errors from filtered directory discovery, separate from the legacy file API.
+#[derive(Debug, Error)]
+pub enum DirectoryError {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error("invalid ignore pattern in {origin}: {source}")]
+    InvalidPattern {
+        origin: String,
+        #[source]
+        source: ignore::Error,
+    },
+    #[error("--ignore only accepts exclusions, not negation: {0}")]
+    NegatedIgnore(String),
+}
+
 /// Reads a regular UTF-8 text file after classifying unsafe or unsupported
 /// inputs. Binary files are detected by a NUL byte.
 pub fn read_text(path: impl AsRef<Path>) -> Result<TextFile, FileError> {
@@ -75,7 +112,8 @@ pub fn read_text(path: impl AsRef<Path>) -> Result<TextFile, FileError> {
 }
 
 /// Collects regular files and symbolic links in deterministic path order.
-/// Generated Purra backup files are excluded.
+/// Generated Purra backup files are excluded. This legacy API does not apply
+/// `.gitignore`; use [`collect_directory_files_with_options`] for filtering.
 pub fn collect_directory_files(
     root: impl AsRef<Path>,
     recursive: bool,
@@ -101,6 +139,142 @@ pub fn collect_directory_files(
     }
     paths.sort();
     Ok(paths)
+}
+
+/// Collects files in deterministic path order after validating all applicable
+/// ignore rules. Excluded directories are pruned before loading their rules.
+/// Only `.gitignore` files inside the scan root are loaded, even outside Git
+/// repositories. Hidden files remain eligible and symbolic links are not followed.
+pub fn collect_directory_files_with_options(
+    root: impl AsRef<Path>,
+    options: &DirectoryOptions,
+) -> Result<Vec<PathBuf>, DirectoryError> {
+    let root = root.as_ref();
+    let mut builder = GitignoreBuilder::new(root);
+    for pattern in &options.ignores {
+        if pattern.starts_with('!') {
+            return Err(DirectoryError::NegatedIgnore(pattern.clone()));
+        }
+        builder
+            .add_line(None, pattern)
+            .map_err(|source| DirectoryError::InvalidPattern {
+                origin: format!("--ignore {pattern:?}"),
+                source,
+            })?;
+    }
+    let explicit = builder
+        .build()
+        .map_err(|source| DirectoryError::InvalidPattern {
+            origin: "--ignore arguments".to_owned(),
+            source,
+        })?;
+
+    let mut walker = WalkDir::new(root)
+        .follow_links(false)
+        .follow_root_links(false);
+    if !options.recursive {
+        walker = walker.max_depth(1);
+    }
+    let mut walker = walker.into_iter();
+    let mut scopes: Vec<(usize, Gitignore)> = Vec::new();
+    let mut paths = Vec::new();
+    while let Some(entry) = walker.next() {
+        let entry = entry.map_err(|source| FileError::Walk {
+            root: root.to_path_buf(),
+            source,
+        })?;
+        let depth = entry.depth();
+        while scopes.last().is_some_and(|(level, _)| *level >= depth) {
+            scopes.pop();
+        }
+        let file_type = entry.file_type();
+        let is_dir = file_type.is_dir();
+        // The root establishes the rule scope; patterns only match its children.
+        if depth != 0 {
+            let excluded = explicit.matched(entry.path(), is_dir).is_ignore()
+                || scopes
+                    .iter()
+                    .rev()
+                    .map(|(_, rules)| rules.matched(entry.path(), is_dir))
+                    .find(|matched| !matched.is_none())
+                    .is_some_and(|matched| matched.is_ignore());
+            if excluded {
+                if is_dir {
+                    walker.skip_current_dir();
+                }
+                continue;
+            }
+        }
+
+        if is_dir {
+            if options.respect_gitignore
+                && (depth == 0 || options.recursive)
+                && let Some(rules) = load_gitignore(entry.path())?
+            {
+                scopes.push((depth, rules));
+            }
+        } else if depth != 0
+            && (file_type.is_file() || file_type.is_symlink())
+            && !is_generated_backup(entry.file_name())
+        {
+            paths.push(entry.into_path());
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn load_gitignore(directory: &Path) -> Result<Option<Gitignore>, DirectoryError> {
+    let path = directory.join(".gitignore");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(FileError::Io {
+                operation: "inspect ignore file",
+                path,
+                source,
+            }
+            .into());
+        }
+    };
+    if metadata.file_type().is_symlink() {
+        return Ok(None);
+    }
+    if !metadata.is_file() {
+        return Err(FileError::Io {
+            operation: "read ignore file",
+            path,
+            source: io::Error::new(io::ErrorKind::InvalidInput, "not a regular file"),
+        }
+        .into());
+    }
+    let file = fs::File::open(&path).map_err(|source| FileError::Io {
+        operation: "read ignore file",
+        path: path.clone(),
+        source,
+    })?;
+    let mut builder = GitignoreBuilder::new(directory);
+    for (index, line) in BufReader::new(file).lines().enumerate() {
+        let line = line.map_err(|source| FileError::Io {
+            operation: "read ignore file",
+            path: path.clone(),
+            source,
+        })?;
+        builder
+            .add_line(Some(path.clone()), &line)
+            .map_err(|source| DirectoryError::InvalidPattern {
+                origin: format!("{}:{}", path.display(), index + 1),
+                source,
+            })?;
+    }
+    builder
+        .build()
+        .map(Some)
+        .map_err(|source| DirectoryError::InvalidPattern {
+            origin: path.display().to_string(),
+            source,
+        })
 }
 
 /// Atomically writes `contents` to `path` without creating a backup.

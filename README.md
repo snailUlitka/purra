@@ -9,7 +9,7 @@ file output, safe in-place directory processing, and CI-friendly dry runs.
 Install the stable release directly from its GitHub tag:
 
 ```sh
-cargo install --git https://github.com/snailUlitka/purra --tag v1.1.0 --locked purra
+cargo install --git https://github.com/snailUlitka/purra --tag v1.2.0 --locked purra
 ```
 
 Cargo installs the executable into its configured binary directory, which is
@@ -36,12 +36,38 @@ purra --ai-preset input.md > output.md
 purra --preset typography.preset input.md output.md
 purra --ai-preset --dry-run docs/
 purra --ai-preset -r -f docs/
+purra --ai-preset -r -f . --ignore '*.pdf' --ignore '.git/'
+purra --ai-preset -r -f . --no-gitignore --ignore '*.pdf'
 purra --in-place-preset "a=b,c=d" input.txt output.txt
 ```
 
 A directory is processed in place. It is non-recursive and asks before each
 changed file by default; `-r` enables recursion and `-f` bypasses confirmation.
 Every in-place change creates a uniquely named hidden sibling backup.
+
+Directory scans now respect `.gitignore` in the scan root and visited
+subdirectories by default, including non-recursive scans and dry runs. This
+deliberately changes directory selection from the 1.1 release.
+`--no-gitignore` restores unfiltered selection unless explicit exclusions are
+supplied. Parent ignore files, global Git settings, `.git/info/exclude`, and
+`.ignore` are not loaded; a Git repository is not required.
+
+Repeat `--ignore <GLOB>` to add exclusions using gitignore-style glob syntax,
+not regular expressions. Patterns are relative to the input directory:
+`*.pdf` matches names at any depth, `/assets/` excludes only the root's assets
+directory, `assets/` excludes directories with that name at any depth, and
+`docs/file.txt` excludes that relative path. Files need not exist when a pattern
+is supplied. Quote patterns to prevent shell expansion; escape glob characters
+when matching literal names, for example `--ignore 'data\[1\].txt'`.
+
+Explicit exclusions accumulate and cannot be cancelled by `.gitignore` rules.
+Negation with a leading `!` is rejected in `--ignore`; use `\!` for a literal
+exclamation mark. `.gitignore` files support their usual comments, escapes, and
+`!` negation. `--no-gitignore` leaves explicit exclusions active. Both flags
+require a directory input and are rejected for stdin or explicit file inputs.
+Excluded directories are not visited. Invalid applicable rules stop processing
+with exit status `2` before any target content is read or changed; ignore-file
+I/O failures use status `3`.
 
 Dry runs produce `path:line:column` findings and exit with status `1` when a
 problem is present, making them suitable for CI checks.
@@ -85,13 +111,20 @@ their original behavior but are deprecated in favor of their `Text*`
 counterparts. Version 2.0 will remove the legacy types and rename the text-
 capable API to the shorter names.
 
+`purra::files::collect_directory_files_with_options` exposes directory filtering
+through `DirectoryOptions` (`recursive`, `respect_gitignore`, and `ignores`) and
+returns `DirectoryError`. Defaults enable `.gitignore` without recursion or
+explicit exclusions. The original `collect_directory_files(root, recursive)`
+and `FileError` retain their behavior and do not apply ignore rules.
+
 See [`docs/README.md`](docs/README.md) for the complete product, architecture,
 and development documentation.
 
 ## Stability and License
 
 Version 1.1 extends preset destinations to non-empty text without removing the
-stable 1.0 interfaces. Backward-incompatible changes remain reserved for a new
-major version.
+stable 1.0 interfaces. Version 1.2 adds directory filtering with the
+deliberate CLI default change described above; existing Rust APIs, replacement
+semantics, and preset grammar remain unchanged.
 
 Purra is available under the [`MIT License`](LICENSE).
