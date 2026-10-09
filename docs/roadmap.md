@@ -47,9 +47,9 @@ are deprecated with migration guidance.
   The original file API retains its unfiltered discovery behavior.
 - Compile-checked benchmarks cover nested ignore rules and subtree pruning.
 
-## Additional CLI Controls
+## Implemented 1.3 Release
 
-The CLI also provides additive controls that retain default behavior:
+Version 1.3 adds CLI controls that retain default behavior:
 
 - `--no-backup` opts out of backup creation for in-place writes while preserving
   atomic replacement and file permissions;

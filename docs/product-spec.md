@@ -24,6 +24,10 @@ Version 1.2 deliberately revises CLI directory selection to respect
 explicit exclusions are supplied. This accepted default change does not alter
 the existing public Rust APIs, preset grammar, or replacement semantics.
 
+Version 1.3 adds `--no-backup`, `-q` / `--quiet`, and repeatable `-v` /
+`--verbose` as opt-in controls. Existing default output, backup behavior, public
+Rust APIs, and exit statuses remain unchanged.
+
 ## Replacement Model
 
 - Every rule maps exactly one Unicode scalar value to a non-empty replacement

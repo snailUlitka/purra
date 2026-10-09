@@ -9,7 +9,7 @@ file output, safe in-place directory processing, and CI-friendly dry runs.
 Install the stable release directly from its GitHub tag:
 
 ```sh
-cargo install --git https://github.com/snailUlitka/purra --tag v1.2.0 --locked purra
+cargo install --git https://github.com/snailUlitka/purra --tag v1.3.0 --locked purra
 ```
 
 Cargo installs the executable into its configured binary directory, which is
@@ -143,5 +143,8 @@ Version 1.1 extends preset destinations to non-empty text without removing the
 stable 1.0 interfaces. Version 1.2 adds directory filtering with the
 deliberate CLI default change described above; existing Rust APIs, replacement
 semantics, and preset grammar remain unchanged.
+
+Version 1.3 adds optional backup suppression and diagnostic verbosity controls
+without changing default behavior or existing Rust APIs.
 
 Purra is available under the [`MIT License`](LICENSE).
