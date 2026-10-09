@@ -88,6 +88,29 @@ For an in-place replacement, the library:
 Backups use `.NAME.purra.bak`, then `.NAME.purra.bak.1`, `.2`, and so on. They
 are retained until explicitly removed by the user.
 
+The CLI selects `replace_in_place` by default. With `--no-backup`, it selects
+the existing `write_atomic` operation on the original path instead: this retains
+the temporary sibling, synchronization, original permissions, symlink rejection,
+and atomic persistence, but omits the backup copy. This selection applies both
+to directories and same-file input/output. Public file-operation signatures and
+the backup guarantee of `replace_in_place` are unchanged.
+
+## CLI Diagnostics
+
+The CLI keeps verbosity and per-run statistics in a shared diagnostic reporter.
+Default output remains compatible; quiet mode suppresses optional diagnostics
+without hiding errors, confirmations, transformed text, or dry-run findings.
+Verbose modes add per-input results and totals. Declined text inputs are counted
+as processed but do not contribute to applied-replacement totals.
+
+Individual matches use one renderer for stdout dry-run findings and stderr
+verbose proposals, with stream-aware colors and original scalar positions.
+Normal transformation only collects detailed findings at verbosity level two or
+higher. Dry runs reuse their existing findings and never duplicate them on
+stderr. Replacement lookup and the public library API are unaffected.
+
+## Future Performance Work
+
 The current whole-file design is intentional for a simple, safe first version.
 Streaming, memory mapping, and parallel traversal require benchmark evidence and
 must preserve UTF-8 boundary handling, deterministic diagnostics, and the

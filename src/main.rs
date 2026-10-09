@@ -69,7 +69,19 @@ struct Cli {
     #[arg(long)]
     dry_run: bool,
 
-    /// Control colors in dry-run diagnostics.
+    /// Disable backups for in-place writes; accepted in all input modes.
+    #[arg(long)]
+    no_backup: bool,
+
+    /// Hide warnings and logs, keeping dry-run findings, errors, and prompts.
+    #[arg(short = 'q', long, conflicts_with = "verbose")]
+    quiet: bool,
+
+    /// Report each input and totals; repeat to show individual matches.
+    #[arg(short = 'v', long, action = ArgAction::Count, conflicts_with = "quiet")]
+    verbose: u8,
+
+    /// Control colors in findings and diagnostics.
     #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
     color: ColorMode,
 
@@ -117,6 +129,171 @@ impl CliError {
 struct Summary {
     findings: usize,
     affected_inputs: usize,
+    processed_inputs: usize,
+    skipped_inputs: usize,
+    declined_inputs: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Verbosity {
+    Quiet,
+    Normal,
+    Verbose,
+    Detailed,
+}
+
+struct Diagnostics {
+    color: ColorMode,
+    verbosity: Verbosity,
+    summary: Summary,
+}
+
+impl Diagnostics {
+    fn new(cli: &Cli) -> Self {
+        Self {
+            color: cli.color,
+            verbosity: if cli.quiet {
+                Verbosity::Quiet
+            } else {
+                match cli.verbose {
+                    0 => Verbosity::Normal,
+                    1 => Verbosity::Verbose,
+                    _ => Verbosity::Detailed,
+                }
+            },
+            summary: Summary::default(),
+        }
+    }
+
+    fn record_processed(&mut self, count: usize) {
+        self.summary.processed_inputs += 1;
+        self.summary.findings += count;
+        self.summary.affected_inputs += usize::from(count != 0);
+    }
+
+    fn checked(&mut self, path: &Path, findings: &[TextFinding<'_>]) -> io::Result<()> {
+        self.record_processed(findings.len());
+        print_findings(stdout_stream(self.color), path, findings)?;
+        if self.verbosity >= Verbosity::Verbose {
+            writeln!(
+                stderr_stream(self.color),
+                "checked {}: {} finding(s)",
+                path.display(),
+                findings.len()
+            )?;
+        }
+        Ok(())
+    }
+
+    fn transformed(&mut self, path: &Path, count: usize) -> io::Result<()> {
+        self.record_processed(count);
+        if self.verbosity >= Verbosity::Verbose {
+            let mut diagnostics = stderr_stream(self.color);
+            if count == 0 {
+                writeln!(diagnostics, "unchanged {} (no matches)", path.display())?;
+            } else {
+                writeln!(
+                    diagnostics,
+                    "processed {}: {count} replacement(s)",
+                    path.display()
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn updated(&mut self, path: &Path, backup: Option<&Path>, count: usize) -> io::Result<()> {
+        self.record_processed(count);
+        if self.verbosity == Verbosity::Quiet {
+            return Ok(());
+        }
+        let mut diagnostics = stderr_stream(self.color);
+        write!(diagnostics, "updated {} (", path.display())?;
+        match backup {
+            Some(backup) => write!(diagnostics, "backup: {}", backup.display())?,
+            None => write!(diagnostics, "no backup")?,
+        }
+        if self.verbosity >= Verbosity::Verbose {
+            write!(diagnostics, "; {count} replacement(s)")?;
+        }
+        writeln!(diagnostics, ")")
+    }
+
+    fn declined(&mut self, path: &Path) -> io::Result<()> {
+        self.summary.processed_inputs += 1;
+        self.summary.declined_inputs += 1;
+        if self.verbosity >= Verbosity::Verbose {
+            writeln!(stderr_stream(self.color), "declined {}", path.display())?;
+        }
+        Ok(())
+    }
+
+    fn skipped(&mut self, path: &Path, reason: SkipReason) -> io::Result<()> {
+        self.summary.skipped_inputs += 1;
+        if self.verbosity == Verbosity::Quiet
+            || (reason == SkipReason::Binary && self.verbosity == Verbosity::Normal)
+        {
+            return Ok(());
+        }
+        let reason_text = match reason {
+            SkipReason::Binary => "binary file",
+            SkipReason::InvalidUtf8 => "invalid UTF-8",
+            SkipReason::SymbolicLink => "symbolic link",
+            SkipReason::UnsupportedFileType => "unsupported file type",
+        };
+        let prefix = if reason == SkipReason::Binary {
+            ""
+        } else {
+            "warning: "
+        };
+        writeln!(
+            stderr_stream(self.color),
+            "{prefix}skipped {}: {reason_text}",
+            path.display()
+        )
+    }
+
+    fn details(&self, engine: &TextEngine, path: &Path, text: &str) -> io::Result<()> {
+        if self.verbosity == Verbosity::Detailed {
+            print_findings(stderr_stream(self.color), path, &engine.find(text))?;
+        }
+        Ok(())
+    }
+
+    fn dry_summary(&self) -> io::Result<()> {
+        if self.verbosity == Verbosity::Normal {
+            writeln!(
+                stderr_stream(self.color),
+                "{} finding(s) in {} input(s)",
+                self.summary.findings,
+                self.summary.affected_inputs
+            )?;
+        }
+        Ok(())
+    }
+
+    fn finish(&self, dry_run: bool) -> io::Result<()> {
+        if self.verbosity >= Verbosity::Verbose {
+            let Summary {
+                findings,
+                affected_inputs,
+                processed_inputs,
+                skipped_inputs,
+                declined_inputs,
+            } = self.summary;
+            let kind = if dry_run {
+                "finding(s)"
+            } else {
+                "replacement(s)"
+            };
+            writeln!(
+                stderr_stream(self.color),
+                "{processed_inputs} processed input(s), {skipped_inputs} skipped input(s), \
+                 {declined_inputs} declined input(s); {findings} {kind} in {affected_inputs} input(s)"
+            )?;
+        }
+        Ok(())
+    }
 }
 
 fn main() -> ExitCode {
@@ -135,14 +312,17 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, CliError> {
     let engine = load_engine(&cli)?;
     validate_path_options(&cli)?;
+    let mut diagnostics = Diagnostics::new(&cli);
 
-    match cli.paths.as_slice() {
-        [] => run_stdin(&engine, &cli),
-        [input] if is_directory(input)? => run_directory(&engine, input, &cli),
-        [input] => run_file_to_stdout(&engine, input, &cli),
-        [input, output] => run_file_to_file(&engine, input, output, &cli),
+    let code = match cli.paths.as_slice() {
+        [] => run_stdin(&engine, &cli, &mut diagnostics),
+        [input] if is_directory(input)? => run_directory(&engine, input, &cli, &mut diagnostics),
+        [input] => run_file_to_stdout(&engine, input, &cli, &mut diagnostics),
+        [input, output] => run_file_to_file(&engine, input, output, &cli, &mut diagnostics),
         _ => unreachable!("clap limits paths to at most two"),
-    }
+    }?;
+    diagnostics.finish(cli.dry_run)?;
+    Ok(code)
 }
 
 fn load_engine(cli: &Cli) -> Result<TextEngine, CliError> {
@@ -181,7 +361,11 @@ fn validate_path_options(cli: &Cli) -> Result<(), CliError> {
     Ok(())
 }
 
-fn run_stdin(engine: &TextEngine, cli: &Cli) -> Result<ExitCode, CliError> {
+fn run_stdin(
+    engine: &TextEngine,
+    cli: &Cli,
+    diagnostics: &mut Diagnostics,
+) -> Result<ExitCode, CliError> {
     if cli.recursive || cli.force {
         return Err(CliError::Usage(
             "--recursive and --force cannot be used with stdin".to_owned(),
@@ -190,58 +374,35 @@ fn run_stdin(engine: &TextEngine, cli: &Cli) -> Result<ExitCode, CliError> {
 
     let mut bytes = Vec::new();
     io::stdin().read_to_end(&mut bytes)?;
+    let path = Path::new("<stdin>");
     if bytes.contains(&0) {
+        diagnostics.skipped(path, SkipReason::Binary)?;
         return Ok(ExitCode::SUCCESS);
     }
     let Ok(input) = String::from_utf8(bytes) else {
-        warn_skip(Path::new("<stdin>"), SkipReason::InvalidUtf8, cli.color)?;
+        diagnostics.skipped(path, SkipReason::InvalidUtf8)?;
         return Ok(ExitCode::SUCCESS);
     };
 
     if cli.dry_run {
         let findings = engine.find(&input);
-        print_findings(Path::new("<stdin>"), &findings, cli.color)?;
-        print_summary(findings.len(), usize::from(!findings.is_empty()), cli.color)?;
+        diagnostics.checked(path, &findings)?;
+        diagnostics.dry_summary()?;
         return Ok(findings_exit(findings.len()));
     }
 
     let replacement = engine.replace(&input);
+    diagnostics.details(engine, path, &input)?;
     io::stdout().write_all(replacement.text.as_bytes())?;
+    diagnostics.transformed(path, replacement.count)?;
     Ok(ExitCode::SUCCESS)
 }
 
-fn run_file_to_stdout(engine: &TextEngine, input: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
-    if cli.recursive || cli.force {
-        return Err(CliError::Usage(
-            "--recursive and --force require a directory input".to_owned(),
-        ));
-    }
-
-    let loaded = read_text(input)?;
-    let TextFile::Text(text) = loaded else {
-        if let TextFile::Skipped(reason) = loaded {
-            warn_skip(input, reason, cli.color)?;
-        }
-        return Ok(ExitCode::SUCCESS);
-    };
-
-    if cli.dry_run {
-        let findings = engine.find(&text);
-        print_findings(input, &findings, cli.color)?;
-        print_summary(findings.len(), usize::from(!findings.is_empty()), cli.color)?;
-        return Ok(findings_exit(findings.len()));
-    }
-
-    let replacement = engine.replace(&text);
-    io::stdout().write_all(replacement.text.as_bytes())?;
-    Ok(ExitCode::SUCCESS)
-}
-
-fn run_file_to_file(
+fn run_file_to_stdout(
     engine: &TextEngine,
     input: &Path,
-    output: &Path,
     cli: &Cli,
+    diagnostics: &mut Diagnostics,
 ) -> Result<ExitCode, CliError> {
     if cli.recursive || cli.force {
         return Err(CliError::Usage(
@@ -252,64 +413,118 @@ fn run_file_to_file(
     let loaded = read_text(input)?;
     let TextFile::Text(text) = loaded else {
         if let TextFile::Skipped(reason) = loaded {
-            warn_skip(input, reason, cli.color)?;
+            diagnostics.skipped(input, reason)?;
+        }
+        return Ok(ExitCode::SUCCESS);
+    };
+
+    if cli.dry_run {
+        let findings = engine.find(&text);
+        diagnostics.checked(input, &findings)?;
+        diagnostics.dry_summary()?;
+        return Ok(findings_exit(findings.len()));
+    }
+
+    let replacement = engine.replace(&text);
+    diagnostics.details(engine, input, &text)?;
+    io::stdout().write_all(replacement.text.as_bytes())?;
+    diagnostics.transformed(input, replacement.count)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_file_to_file(
+    engine: &TextEngine,
+    input: &Path,
+    output: &Path,
+    cli: &Cli,
+    diagnostics: &mut Diagnostics,
+) -> Result<ExitCode, CliError> {
+    if cli.recursive || cli.force {
+        return Err(CliError::Usage(
+            "--recursive and --force require a directory input".to_owned(),
+        ));
+    }
+
+    let loaded = read_text(input)?;
+    let TextFile::Text(text) = loaded else {
+        if let TextFile::Skipped(reason) = loaded {
+            diagnostics.skipped(input, reason)?;
         }
         return Ok(ExitCode::SUCCESS);
     };
     let replacement = engine.replace(&text);
+    diagnostics.details(engine, input, &text)?;
 
     if same_path(input, output)? {
         if replacement.changed() {
-            let backup = replace_in_place(input, &replacement.text)?;
-            report_update(input, &backup, cli.color)?;
+            let backup = write_in_place(input, &replacement.text, cli.no_backup)?;
+            diagnostics.updated(input, backup.as_deref(), replacement.count)?;
+        } else {
+            diagnostics.transformed(input, 0)?;
         }
     } else {
         write_atomic(output, &replacement.text, Some(input))?;
+        diagnostics.transformed(input, replacement.count)?;
     }
     Ok(ExitCode::SUCCESS)
 }
 
-fn run_directory(engine: &TextEngine, directory: &Path, cli: &Cli) -> Result<ExitCode, CliError> {
+fn run_directory(
+    engine: &TextEngine,
+    directory: &Path,
+    cli: &Cli,
+    diagnostics: &mut Diagnostics,
+) -> Result<ExitCode, CliError> {
     let options = DirectoryOptions {
         recursive: cli.recursive,
         respect_gitignore: !cli.no_gitignore,
         ignores: cli.ignores.clone(),
     };
     let paths = collect_directory_files_with_options(directory, &options)?;
-    let mut summary = Summary::default();
 
     for path in paths {
         let loaded = read_text(&path)?;
         let TextFile::Text(text) = loaded else {
             if let TextFile::Skipped(reason) = loaded {
-                warn_skip(&path, reason, cli.color)?;
+                diagnostics.skipped(&path, reason)?;
             }
             continue;
         };
 
         if cli.dry_run {
             let findings = engine.find(&text);
-            if !findings.is_empty() {
-                summary.affected_inputs += 1;
-                summary.findings += findings.len();
-                print_findings(&path, &findings, cli.color)?;
-            }
+            diagnostics.checked(&path, &findings)?;
             continue;
         }
 
         let replacement = engine.replace(&text);
-        if !replacement.changed() || (!cli.force && !confirm(&path, cli.color)?) {
+        if !replacement.changed() {
+            diagnostics.transformed(&path, 0)?;
             continue;
         }
-        let backup = replace_in_place(&path, &replacement.text)?;
-        report_update(&path, &backup, cli.color)?;
+        diagnostics.details(engine, &path, &text)?;
+        if !cli.force && !confirm(&path, cli.color)? {
+            diagnostics.declined(&path)?;
+            continue;
+        }
+        let backup = write_in_place(&path, &replacement.text, cli.no_backup)?;
+        diagnostics.updated(&path, backup.as_deref(), replacement.count)?;
     }
 
     if cli.dry_run {
-        print_summary(summary.findings, summary.affected_inputs, cli.color)?;
-        Ok(findings_exit(summary.findings))
+        diagnostics.dry_summary()?;
+        Ok(findings_exit(diagnostics.summary.findings))
     } else {
         Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn write_in_place(path: &Path, text: &str, no_backup: bool) -> Result<Option<PathBuf>, FileError> {
+    if no_backup {
+        write_atomic(path, text, None)?;
+        Ok(None)
+    } else {
+        replace_in_place(path, text).map(Some)
     }
 }
 
@@ -347,8 +562,11 @@ fn findings_exit(count: usize) -> ExitCode {
     }
 }
 
-fn print_findings(path: &Path, findings: &[TextFinding<'_>], color: ColorMode) -> io::Result<()> {
-    let mut output = stdout_stream(color);
+fn print_findings(
+    mut output: impl Write,
+    path: &Path,
+    findings: &[TextFinding<'_>],
+) -> io::Result<()> {
     let path_style = Style::new().fg_color(Some(AnsiColor::Magenta.into()));
     let position_style = Style::new().fg_color(Some(AnsiColor::Green.into()));
     let finding_style = Style::new().fg_color(Some(AnsiColor::Red.into())).bold();
@@ -371,38 +589,6 @@ fn print_findings(path: &Path, findings: &[TextFinding<'_>], color: ColorMode) -
         )?;
     }
     Ok(())
-}
-
-fn print_summary(findings: usize, affected_inputs: usize, color: ColorMode) -> io::Result<()> {
-    let mut diagnostics = stderr_stream(color);
-    writeln!(
-        diagnostics,
-        "{findings} finding(s) in {affected_inputs} input(s)"
-    )
-}
-
-fn warn_skip(path: &Path, reason: SkipReason, color: ColorMode) -> io::Result<()> {
-    if reason == SkipReason::Binary {
-        return Ok(());
-    }
-    let reason = match reason {
-        SkipReason::Binary => unreachable!(),
-        SkipReason::InvalidUtf8 => "invalid UTF-8",
-        SkipReason::SymbolicLink => "symbolic link",
-        SkipReason::UnsupportedFileType => "unsupported file type",
-    };
-    let mut diagnostics = stderr_stream(color);
-    writeln!(diagnostics, "warning: skipped {}: {reason}", path.display())
-}
-
-fn report_update(path: &Path, backup: &Path, color: ColorMode) -> io::Result<()> {
-    let mut diagnostics = stderr_stream(color);
-    writeln!(
-        diagnostics,
-        "updated {} (backup: {})",
-        path.display(),
-        backup.display()
-    )
 }
 
 fn confirm(path: &Path, color: ColorMode) -> io::Result<bool> {

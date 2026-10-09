@@ -1,10 +1,10 @@
 use std::fs;
 use std::hint::black_box;
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use purra::files::{
     DirectoryOptions, TextFile, collect_directory_files, collect_directory_files_with_options,
-    read_text,
+    read_text, replace_in_place, write_atomic,
 };
 use purra::{TextEngine, TextPreset, TextRule};
 use tempfile::tempdir;
@@ -129,10 +129,45 @@ fn directory_filter_benchmarks(criterion: &mut Criterion) {
     group.finish();
 }
 
+fn atomic_write_benchmarks(criterion: &mut Criterion) {
+    let input = "a".repeat(MIB);
+    let replacement = "b".repeat(MIB);
+    let mut group = criterion.benchmark_group("atomic_write");
+    group.throughput(Throughput::Bytes(MIB as u64));
+
+    for backup in [true, false] {
+        let name = if backup {
+            "with_backup"
+        } else {
+            "without_backup"
+        };
+        group.bench_function(name, |bencher| {
+            bencher.iter_batched_ref(
+                || {
+                    let directory = tempdir().unwrap();
+                    let path = directory.path().join("large.txt");
+                    fs::write(&path, &input).unwrap();
+                    (directory, path)
+                },
+                |(_, path)| {
+                    if backup {
+                        black_box(replace_in_place(black_box(path), &replacement).unwrap());
+                    } else {
+                        write_atomic(black_box(path), &replacement, None).unwrap();
+                    }
+                },
+                BatchSize::PerIteration,
+            );
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     engine_benchmarks,
     file_benchmarks,
-    directory_filter_benchmarks
+    directory_filter_benchmarks,
+    atomic_write_benchmarks
 );
 criterion_main!(benches);

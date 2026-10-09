@@ -47,6 +47,21 @@ are deprecated with migration guidance.
   The original file API retains its unfiltered discovery behavior.
 - Compile-checked benchmarks cover nested ignore rules and subtree pruning.
 
+## Additional CLI Controls
+
+The CLI also provides additive controls that retain default behavior:
+
+- `--no-backup` opts out of backup creation for in-place writes while preserving
+  atomic replacement and file permissions;
+- `-q` / `--quiet` suppress optional diagnostics while keeping findings, errors,
+  and confirmations visible;
+- `-v` / `--verbose` report per-input results and totals, and `-vv` additionally
+  report individual matches before writing or confirmation.
+
+The existing public Rust API is unchanged. Compile-checked atomic-write
+benchmarks cover approximately 1 MiB inputs with and without backups; no
+performance measurements are claimed.
+
 ## Stable 1.x Contract
 
 Version 1.0 treats the documented CLI surface, preset grammar, replacement

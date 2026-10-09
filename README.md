@@ -35,15 +35,21 @@ purra --ai-preset input.md output.md
 purra --ai-preset input.md > output.md
 purra --preset typography.preset input.md output.md
 purra --ai-preset --dry-run docs/
+purra --ai-preset --dry-run -q docs/
 purra --ai-preset -r -f docs/
 purra --ai-preset -r -f . --ignore '*.pdf' --ignore '.git/'
 purra --ai-preset -r -f . --no-gitignore --ignore '*.pdf'
+purra --ai-preset -r -f --no-backup -v docs/
+purra --ascii-preset -vv input.md > output.md
 purra --in-place-preset "a=b,c=d" input.txt output.txt
 ```
 
 A directory is processed in place. It is non-recursive and asks before each
 changed file by default; `-r` enables recursion and `-f` bypasses confirmation.
-Every in-place change creates a uniquely named hidden sibling backup.
+Every in-place change creates a uniquely named hidden sibling backup by default.
+`--no-backup` disables backup creation while retaining atomic writes and file
+permissions. Existing backups are kept. The flag is accepted in every mode and
+has no effect when no in-place write occurs, including dry runs.
 
 Directory scans now respect `.gitignore` in the scan root and visited
 subdirectories by default, including non-recursive scans and dry runs. This
@@ -71,6 +77,17 @@ I/O failures use status `3`.
 
 Dry runs produce `path:line:column` findings and exit with status `1` when a
 problem is present, making them suitable for CI checks.
+
+| Output option | Behavior |
+| --- | --- |
+| `-q`, `--quiet` | Hide warnings, update messages, and summaries; keep dry-run findings, transformed text, errors, and confirmation prompts. |
+| `-v`, `--verbose` | Report each input's result and counts, plus totals for processed, skipped, and declined inputs and replacements. |
+| `-vv` | Also show every match with its original position and replacement before confirmation or writing. Further repetitions use this same level. |
+
+Quiet and verbose options conflict and exit with status `2` when combined.
+Logs use stderr; transformed text and dry-run findings use stdout. Verbose dry
+runs count findings and do not repeat individual findings on stderr.
+`--color auto|always|never` controls styling in findings and diagnostics.
 
 ## Presets
 

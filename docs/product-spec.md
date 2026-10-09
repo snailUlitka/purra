@@ -132,13 +132,20 @@ Behavior by input shape:
 - `-f` disables per-file confirmation.
 
 In-place writes use an atomic replacement strategy, preserve file permissions,
-and create a unique hidden sibling backup. Backups are named
+and create a unique hidden sibling backup by default. Backups are named
 `.NAME.purra.bak`, `.NAME.purra.bak.1`, and so on, and are retained until the
 user removes them. Generated backups are excluded from directory scans.
+
+`--no-backup` disables backup creation for directory processing and same-file
+input/output, while preserving atomic replacement and file permissions. It
+does not remove existing backups. The flag is accepted in every input mode;
+it has no effect on stdin/stdout, distinct output paths, or dry runs. Unchanged
+in-place files and declined replacements are not written and create no backup.
 
 File-to-file output is also written atomically. An existing output keeps its own
 permissions; a new output inherits the input permissions. When input and output
 resolve to the same file, the operation uses the in-place backup workflow.
+`--no-backup` also applies to that workflow.
 
 ## Directory Exclusions
 
@@ -215,6 +222,40 @@ Exit status `0` means that processing or checking completed without findings.
 Exit status `2` is reserved for invalid configuration or usage, including an
 invalid preset. Fatal I/O and runtime failures use status `3`.
 
+## Diagnostic Verbosity
+
+Without verbosity options, existing output behavior is retained. New controls
+are:
+
+- `-q` / `--quiet` suppress warnings, update messages, and summaries. Dry-run
+  findings, transformed stdout text, errors, confirmation prompts, and messages
+  requesting a valid confirmation response remain visible.
+- `-v` / `--verbose` report each input's result: replacement count, no matches,
+  skip reason, or declined confirmation. A final summary includes processed,
+  skipped, and declined input counts, the replacement count, and the number of
+  inputs with replacements.
+- `-vv` (or two `--verbose` options) additionally show each match in original
+  source order, with its original path, line, Unicode-scalar column, and
+  replacement. For directory processing, these proposals precede confirmation
+  and remain visible even if the user declines. Further repetitions use the
+  same detail level.
+
+Quiet and verbose options are mutually exclusive in either order. Combining
+them is a usage error with exit status `2`. The long quiet option is `--quiet`;
+`--quite` is not an alias.
+
+All additional logs use stderr and honor `--color`. Transformed content and
+dry-run findings remain on stdout. Dry runs never duplicate individual findings
+on stderr, even with `-vv`.
+
+A processed input is a successfully inspected UTF-8 text input, including an
+unchanged input or one whose replacement was declined. Skipped inputs are
+counted separately. Normal processing counts only replacements successfully
+written; a declined input contributes no replacements. Dry-run statistics count
+all findings. A count measures original matched Unicode scalar values, not
+replacement-string length. Verbosity options do not change exit statuses or
+confirmation requirements.
+
 ## Performance
 
 Performance comparable to Ruff is a product goal, but it is not yet a measurable
@@ -225,3 +266,5 @@ Criterion cases for clean ASCII, sparse and dense AI typography, dense
 scalar-to-text expansion, regional-indicator flag scalars, file loading plus
 replacement, directory discovery, nested `.gitignore` rules, and pruning a
 2,048-file subtree; results have not yet been recorded.
+Atomic-write cases compare approximately 1 MiB writes with and without a backup,
+with fixture setup and cleanup outside the measured operation.

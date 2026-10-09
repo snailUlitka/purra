@@ -85,7 +85,9 @@ cargo bench --bench engine
 
 The benchmark target covers approximately 1 MiB clean ASCII, sparse AI
 typography, dense AI typography, dense scalar-to-text expansions,
-regional-indicator, file-read-and-replace, and directory-discovery workloads.
+regional-indicator, file-read-and-replace, directory-discovery, and atomic-write
+workloads. Atomic-write cases compare approximately 1 MiB writes with and without
+backups, preparing and cleaning up each fixture outside the measured operation.
 Directory-filter cases cover nested `.gitignore` rules and both visiting and
 pruning a 2,048-file subtree. Fixtures are created outside the timed iterations;
 discovery includes rule loading and compilation.
